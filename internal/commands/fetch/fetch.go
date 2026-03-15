@@ -1,8 +1,10 @@
 package fetch
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 
 	"gogws/internal/config"
@@ -11,8 +13,10 @@ import (
 	"gogws/internal/gws"
 	"gogws/internal/hooks"
 	"gogws/internal/ui/cli"
+	engineui "gogws/internal/ui/engineui"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 func NewCommand(getConfig func() *config.Config) *cobra.Command {
@@ -43,38 +47,74 @@ func runFetch(getConfig func() *config.Config) error {
 		return fmt.Errorf("failed to load projects: %w", err)
 	}
 
-	renderer := cli.NewRenderer()
-	output := engine.NewOutputHandler(renderer, false)
-
-	commands := make([]engine.RepoCommand, 0, len(ws.Projects))
-	var skippedResults []engine.Result
+	jobs := make([]engine.Job, 0, len(ws.Projects))
+	var skippedJobs []engine.Result
 
 	for _, p := range ws.Projects {
 		repoPath := filepath.Join(cfg.WorkspaceRoot, p.Path)
 		status := git.GetStatus(repoPath)
 
 		if !status.Exists {
-			cmd := engine.NewGitCommand(repoPath, p.Path, "fetch", "--all")
-			skippedResults = append(skippedResults, engine.Skip(cmd, "not cloned yet"))
+			skippedJobs = append(skippedJobs, engine.Result{
+				Label:      p.Path,
+				Success:    false,
+				Skipped:    true,
+				SkipReason: "not cloned yet",
+			})
 			continue
 		}
 
-		commands = append(commands, engine.NewGitCommand(repoPath, p.Path, "fetch", "--all"))
+		path := repoPath
+		jobs = append(jobs, engine.Job{
+			Label: p.Path,
+			Fn: func(ctx context.Context, notify engine.Notify) error {
+				return engine.Wrap(git.Fetch(path).AsCmd()).Run(ctx, notify)
+			},
+		})
 	}
 
-	result := engine.Execute(commands, engine.ExecuteOptions{
-		Parallel:    cfg.Parallel,
-		StopOnError: cfg.StopOnError,
-	})
+	opts := engine.DefaultOptions().
+		WithParallel(cfg.Parallel).
+		WithStopOnError(cfg.StopOnError)
 
-	for _, r := range skippedResults {
-		result.AddResult(r)
+	eng := engine.NewEngine(opts)
+	events, resultCh := eng.RunJobs(context.Background(), jobs)
+
+	isInteractive := term.IsTerminal(int(os.Stdout.Fd()))
+
+	if isInteractive {
+		if err := engineui.Run(events, opts.Parallel, len(jobs)); err != nil {
+			slog.Error("UI error", "error", err)
+		}
+	} else {
+		engine.ConsumeVerbose(events)
 	}
 
-	output.RenderSummary(result, "Fetched")
+	execResult := <-resultCh
 
-	if err := hooks.PostFetch(cfg.WorkspaceRoot, result.SuccessCount()); err != nil {
+	for _, skipped := range skippedJobs {
+		execResult.AddResult(skipped)
+	}
+
+	if !isInteractive {
+		renderer := cli.NewRenderer()
+		if execResult.HasErrors() {
+			for _, r := range execResult.Failed() {
+				renderer.RenderError(fmt.Sprintf("%s: %v", r.Label, r.Error))
+			}
+		}
+		renderer.RenderSuccess(fmt.Sprintf("Fetched %d repositories", execResult.SuccessCount()))
+		if execResult.SkippedCount() > 0 {
+			renderer.RenderWarning(fmt.Sprintf("Skipped %d repositories", execResult.SkippedCount()))
+		}
+	}
+
+	if err := hooks.PostFetch(cfg.WorkspaceRoot, execResult.SuccessCount()); err != nil {
 		return fmt.Errorf("post-fetch hook failed: %w", err)
+	}
+
+	if execResult.HasErrors() {
+		return fmt.Errorf("%d repositories failed to fetch", execResult.FailedCount())
 	}
 
 	return nil

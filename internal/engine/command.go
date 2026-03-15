@@ -1,65 +1,93 @@
 package engine
 
-type CommandType int
-
-const (
-	CommandTypeGit CommandType = iota
-	CommandTypeShell
-	CommandTypeCustom
+import (
+	"bytes"
+	"context"
+	"os/exec"
 )
 
-type RepoCommand struct {
-	RepoPath string
-	RepoName string
-	Type     CommandType
-	Args     []string
-	Action   func() (string, error)
-	Context  map[string]any
-	order    int
+type Notify func(eventType EventType, log string)
+
+type CommandFunc func(ctx context.Context, notify Notify) error
+
+type Job struct {
+	Label string
+	Fn    CommandFunc
 }
 
-func NewGitCommand(repoPath, repoName string, args ...string) RepoCommand {
-	return RepoCommand{
-		RepoPath: repoPath,
-		RepoName: repoName,
-		Type:     CommandTypeGit,
-		Args:     args,
-		Context:  make(map[string]any),
+func NewJob(label string, fn CommandFunc) Job {
+	return Job{Label: label, Fn: fn}
+}
+
+func WrapRunner(notify Notify) func(context.Context, *exec.Cmd) error {
+	return func(ctx context.Context, cmd *exec.Cmd) error {
+		return Wrap(cmd).Run(ctx, notify)
 	}
 }
 
-func NewShellCommand(repoPath, repoName, command string) RepoCommand {
-	return RepoCommand{
-		RepoPath: repoPath,
-		RepoName: repoName,
-		Type:     CommandTypeShell,
-		Args:     []string{command},
-		Context:  make(map[string]any),
-	}
+type NotifiableCmd struct {
+	cmd *exec.Cmd
 }
 
-func NewCustomCommand(repoPath, repoName string, action func() (string, error)) RepoCommand {
-	return RepoCommand{
-		RepoPath: repoPath,
-		RepoName: repoName,
-		Type:     CommandTypeCustom,
-		Action:   action,
-		Context:  make(map[string]any),
-	}
+func Wrap(cmd *exec.Cmd) *NotifiableCmd {
+	return &NotifiableCmd{cmd: cmd}
 }
 
-func (c *RepoCommand) WithContext(key string, value any) RepoCommand {
-	if c.Context == nil {
-		c.Context = make(map[string]any)
+func (nc *NotifiableCmd) Run(ctx context.Context, notify Notify) error {
+	stdout := &lineNotifyWriter{notify: func(s string) { notify(EventLog, s) }}
+	stderr := &lineNotifyWriter{notify: func(s string) { notify(EventLog, s) }}
+	nc.cmd.Stdout = stdout
+	nc.cmd.Stderr = stderr
+
+	if err := nc.cmd.Start(); err != nil {
+		return err
 	}
-	c.Context[key] = value
-	return *c
+
+	err := nc.cmd.Wait()
+
+	stdout.Close()
+	stderr.Close()
+
+	return err
 }
 
-func (c *RepoCommand) GetContext(key string) (any, bool) {
-	if c.Context == nil {
-		return nil, false
+type lineNotifyWriter struct {
+	notify func(string)
+	buf    []byte
+}
+
+func (lnw *lineNotifyWriter) Write(p []byte) (int, error) {
+	lnw.buf = append(lnw.buf, p...)
+
+	for {
+		idxN := bytes.IndexByte(lnw.buf, '\n')
+		idxR := bytes.IndexByte(lnw.buf, '\r')
+
+		var idx int
+		if idxN == -1 && idxR == -1 {
+			break
+		} else if idxN == -1 {
+			idx = idxR
+		} else if idxR == -1 {
+			idx = idxN
+		} else {
+			idx = min(idxN, idxR)
+		}
+
+		line := string(lnw.buf[:idx])
+		if len(line) > 0 {
+			lnw.notify(line)
+		}
+		lnw.buf = lnw.buf[idx+1:]
 	}
-	val, ok := c.Context[key]
-	return val, ok
+
+	return len(p), nil
+}
+
+func (lnw *lineNotifyWriter) Close() error {
+	if len(lnw.buf) > 0 {
+		lnw.notify(string(lnw.buf))
+		lnw.buf = nil
+	}
+	return nil
 }

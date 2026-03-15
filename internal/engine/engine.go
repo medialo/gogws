@@ -1,186 +1,199 @@
 package engine
 
 import (
+	"context"
 	"log/slog"
 	"sync"
-	"sync/atomic"
 	"time"
-
-	"gogws/internal/gws"
 )
 
-type ExecuteOptions struct {
+type Options struct {
 	Parallel    int
 	StopOnError bool
 	Timeout     time.Duration
-	Verbose     bool
-
-	OnStart    func(cmd RepoCommand)
-	OnComplete func(result Result)
-	OnProgress func(current, total int, cmd RepoCommand)
 }
 
-func DefaultOptions() ExecuteOptions {
-	return ExecuteOptions{
-		Parallel:    0,
+func DefaultOptions() Options {
+	return Options{
+		Parallel:    5,
 		StopOnError: false,
 		Timeout:     0,
-		Verbose:     false,
 	}
 }
 
-func Execute(commands []RepoCommand, opts ExecuteOptions) *ExecuteResult {
-	slog.Debug("Executing commands", "count", len(commands), "parallel", opts.Parallel)
-	if len(commands) == 0 {
-		return NewExecuteResult()
-	}
-
-	for i := range commands {
-		commands[i].order = i
-	}
-
-	parallel := opts.Parallel
-	if parallel == 0 {
-		parallel = gws.DefaultParallel
-	}
-
-	if len(commands) == 1 {
-		parallel = 1
-	}
-
-	if parallel == 1 {
-		return executeSerial(commands, opts)
-	}
-	return executeParallel(commands, opts, parallel)
+func (opts Options) WithParallel(parallel int) Options {
+	opts.Parallel = parallel
+	return opts
 }
 
-func executeSerial(commands []RepoCommand, opts ExecuteOptions) *ExecuteResult {
-	execResult := NewExecuteResult()
-	startTime := time.Now()
-
-	for i, cmd := range commands {
-		if opts.OnStart != nil {
-			opts.OnStart(cmd)
-		}
-
-		if opts.OnProgress != nil {
-			opts.OnProgress(i+1, len(commands), cmd)
-		}
-
-		result := executeSingleCommand(cmd, opts.Timeout)
-
-		if opts.OnComplete != nil {
-			opts.OnComplete(result)
-		}
-
-		execResult.AddResult(result)
-
-		if opts.StopOnError && result.IsFailure() {
-			execResult.Stopped = true
-			execResult.StopReason = "stopped on first error"
-			break
-		}
-	}
-
-	execResult.TotalDuration = time.Since(startTime)
-	return execResult
+func (opts Options) WithStopOnError(stopOnError bool) Options {
+	opts.StopOnError = stopOnError
+	return opts
 }
 
-func executeParallel(commands []RepoCommand, opts ExecuteOptions, parallel int) *ExecuteResult {
-	execResult := NewExecuteResult()
-	startTime := time.Now()
+func (opts Options) WithTimeout(timeout time.Duration) Options {
+	opts.Timeout = timeout
+	return opts
+}
 
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, min(parallel, len(commands)))
-	var mu sync.Mutex
-	var stopped atomic.Bool
-	var completedCount atomic.Int32
+type Engine struct {
+	options Options
+}
 
-	for _, cmd := range commands {
-		if stopped.Load() {
-			break
-		}
+func NewEngine(opts Options) *Engine {
+	return &Engine{
+		options: opts,
+	}
+}
 
-		wg.Add(1)
-		go func(c RepoCommand) {
-			defer wg.Done()
+type runningJob struct {
+	job   Job
+	index int
+}
 
-			if stopped.Load() {
+func (engine *Engine) RunJobs(ctx context.Context, jobs []Job) (<-chan Event, <-chan *ExecuteResult) {
+	eventCh := make(chan Event, 100)
+	resultCh := make(chan *ExecuteResult, 1)
+
+	go engine.runJobsInternal(ctx, jobs, eventCh, resultCh)
+
+	return eventCh, resultCh
+}
+
+func (engine *Engine) runJobsInternal(ctx context.Context, jobs []Job, eventCh chan Event, resultCh chan *ExecuteResult) {
+	defer close(eventCh)
+	defer close(resultCh)
+
+	if len(jobs) == 0 {
+		resultCh <- NewExecuteResult()
+		return
+	}
+
+	nbWorkers := min(engine.options.Parallel, len(jobs))
+	slog.Debug("Running jobs", "nbJobs", len(jobs), "nbWorkers", nbWorkers)
+
+	jobsChan := make(chan runningJob, nbWorkers)
+	resultsChan := make(chan Result, len(jobs))
+	wg := &sync.WaitGroup{}
+
+	var cancelCtx context.Context
+	var cancel context.CancelFunc
+	if engine.options.StopOnError {
+		cancelCtx, cancel = context.WithCancel(ctx)
+		defer cancel()
+	} else {
+		cancelCtx = ctx
+		cancel = func() {}
+	}
+
+	if engine.options.Timeout > 0 {
+		var timeoutCancel context.CancelFunc
+		cancelCtx, timeoutCancel = context.WithTimeout(cancelCtx, engine.options.Timeout)
+		defer timeoutCancel()
+	}
+
+	wg.Add(len(jobs))
+
+	for workerID := 0; workerID < nbWorkers; workerID++ {
+		go func(id int) {
+			for rj := range jobsChan {
+				select {
+				case <-cancelCtx.Done():
+					resultsChan <- Result{
+						Label:      rj.job.Label,
+						Success:    false,
+						Skipped:    true,
+						SkipReason: "cancelled",
+						order:      rj.index,
+					}
+					wg.Done()
+					continue
+				default:
+				}
+
+				eventCh <- Event{
+					GoroutineID: id,
+					Type:        EventJobStart,
+					JobLabel:    rj.job.Label,
+				}
+
+				start := time.Now()
+				notify := func(eventType EventType, log string) {
+					eventCh <- Event{
+						GoroutineID: id,
+						Type:        eventType,
+						JobLabel:    rj.job.Label,
+						Log:         log,
+					}
+				}
+
+				err := rj.job.Fn(cancelCtx, notify)
+				duration := time.Since(start)
+
+				success := err == nil
+				var jobErr error
+				if !success {
+					jobErr = err
+					if engine.options.StopOnError {
+						cancel()
+					}
+				}
+
+				eventCh <- Event{
+					GoroutineID: id,
+					Type:        EventJobEnd,
+					JobLabel:    rj.job.Label,
+					Success:     success,
+					Err:         jobErr,
+				}
+
+				resultsChan <- Result{
+					Label:    rj.job.Label,
+					Success:  success,
+					Error:    jobErr,
+					Duration: duration,
+					order:    rj.index,
+				}
+				wg.Done()
+			}
+		}(workerID)
+	}
+
+	go func() {
+		for i, job := range jobs {
+			select {
+			case <-cancelCtx.Done():
+				for j := i; j < len(jobs); j++ {
+					resultsChan <- Result{
+						Label:      jobs[j].Label,
+						Success:    false,
+						Skipped:    true,
+						SkipReason: "cancelled",
+						order:      j,
+					}
+					wg.Done()
+				}
 				return
+			case jobsChan <- runningJob{job: job, index: i}:
 			}
-
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			if stopped.Load() {
-				return
-			}
-
-			if opts.OnStart != nil {
-				opts.OnStart(c)
-			}
-
-			result := executeSingleCommand(c, opts.Timeout)
-
-			completed := int(completedCount.Add(1))
-			if opts.OnProgress != nil {
-				opts.OnProgress(completed, len(commands), c)
-			}
-
-			if opts.OnComplete != nil {
-				opts.OnComplete(result)
-			}
-
-			mu.Lock()
-			slog.Debug("Command completed", "repo", c.RepoName, "success", result.Success, "duration", result.Duration)
-			execResult.AddResult(result)
-			mu.Unlock()
-
-			if opts.StopOnError && result.IsFailure() {
-				stopped.Store(true)
-				mu.Lock()
-				execResult.Stopped = true
-				execResult.StopReason = "stopped on first error"
-				mu.Unlock()
-			}
-		}(cmd)
-	}
+		}
+		close(jobsChan)
+	}()
 
 	wg.Wait()
+	close(resultsChan)
 
+	execResult := NewExecuteResult()
+	for r := range resultsChan {
+		execResult.AddResult(r)
+	}
 	execResult.SortByOrder()
-	execResult.TotalDuration = time.Since(startTime)
-	return execResult
-}
 
-func executeSingleCommand(cmd RepoCommand, timeout time.Duration) Result {
-	startTime := time.Now()
-
-	stdout, stderr, err := executeCommand(cmd, timeout)
-
-	result := Result{
-		Command:  cmd,
-		Success:  err == nil,
-		Error:    err,
-		Stdout:   stdout,
-		Stderr:   stderr,
-		Duration: time.Since(startTime),
-		order:    cmd.order,
+	if cancelCtx.Err() != nil {
+		execResult.Stopped = true
+		execResult.StopReason = cancelCtx.Err().Error()
 	}
 
-	return result
-}
-
-// Skip mark a command result as skipped with a reason.
-// This is used when a command is not executed due to some condition (e.g. no changes).
-// See this command like a friendly way to indicate that a command was intentionally not run, rather than it being an error or failure.
-// Return a Result with Success=false, Skipped=true, and the provided reason
-func Skip(cmd RepoCommand, reason string) Result {
-	return Result{
-		Command:    cmd,
-		Success:    false,
-		Skipped:    true,
-		SkipReason: reason,
-		order:      cmd.order,
-	}
+	slog.Debug("Engine finished", "nbJobs", len(jobs), "success", execResult.SuccessCount(), "failed", execResult.FailedCount())
+	resultCh <- execResult
 }

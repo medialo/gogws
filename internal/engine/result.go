@@ -6,11 +6,9 @@ import (
 )
 
 type Result struct {
-	Command    RepoCommand
+	Label      string
 	Success    bool
 	Error      error
-	Stdout     string
-	Stderr     string
 	Duration   time.Duration
 	Skipped    bool
 	SkipReason string
@@ -27,10 +25,6 @@ func (r *Result) IsFailure() bool {
 
 func (r *Result) IsSkipped() bool {
 	return r.Skipped
-}
-
-func (r *Result) HasOutput() bool {
-	return r.Stdout != "" || r.Stderr != ""
 }
 
 type ExecuteResult struct {
@@ -110,26 +104,26 @@ func (r *ExecuteResult) AllSucceeded() bool {
 	return r.FailedCount() == 0 && r.SuccessCount() > 0
 }
 
-func (r *ExecuteResult) SuccessNames() []string {
-	var names []string
+func (r *ExecuteResult) SuccessLabels() []string {
+	var labels []string
 	for _, res := range r.Succeeded() {
-		names = append(names, res.Command.RepoName)
+		labels = append(labels, res.Label)
 	}
-	return names
+	return labels
 }
 
-func (r *ExecuteResult) FailedNames() []string {
-	var names []string
+func (r *ExecuteResult) FailedLabels() []string {
+	var labels []string
 	for _, res := range r.Failed() {
-		names = append(names, res.Command.RepoName)
+		labels = append(labels, res.Label)
 	}
-	return names
+	return labels
 }
 
-func (r *ExecuteResult) SkippedNames() []string {
-	var names []string
+func (r *ExecuteResult) SkippedLabels() []string {
+	var labels []string
 	for _, res := range r.Skipped() {
-		names = append(names, res.Command.RepoName)
+		labels = append(labels, res.Label)
 	}
-	return names
+	return labels
 }

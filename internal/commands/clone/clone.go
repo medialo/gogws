@@ -1,17 +1,22 @@
 package clone
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 
 	"gogws/internal/config"
+	"gogws/internal/engine"
 	"gogws/internal/git"
 	"gogws/internal/gws"
 	"gogws/internal/hooks"
 	"gogws/internal/ui/cli"
+	engineui "gogws/internal/ui/engineui"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 func NewCommand(getConfig func() *config.Config) *cobra.Command {
@@ -45,6 +50,10 @@ func runClone(getConfig func() *config.Config, args []string) error {
 	}
 
 	renderer := cli.NewRenderer()
+	isInteractive := term.IsTerminal(int(os.Stdout.Fd()))
+
+	jobs := make([]engine.Job, 0, len(args))
+	var skipped []string
 
 	for _, repoPath := range args {
 		project, exists := projectMap[repoPath]
@@ -57,6 +66,7 @@ func runClone(getConfig func() *config.Config, args []string) error {
 		status := git.GetStatus(fullPath)
 		if status.Exists {
 			fmt.Println(renderer.RenderWarning(fmt.Sprintf("%s: already exists", repoPath)))
+			skipped = append(skipped, repoPath)
 			continue
 		}
 
@@ -65,21 +75,58 @@ func runClone(getConfig func() *config.Config, args []string) error {
 			continue
 		}
 
-		slog.Debug("Cloning", "path", repoPath)
-		fmt.Println(renderer.RenderInfo(fmt.Sprintf("Cloning %s...", repoPath)))
-
 		remotes := git.ToGitRemotes(project.Remotes)
-		err := git.CloneWorkspace(cfg.WorkspaceRoot, project.Path, remotes)
-		success := err == nil
-		if err != nil {
-			fmt.Println(renderer.RenderError(fmt.Sprintf("%s: %v", repoPath, err)))
-		} else {
-			fmt.Println(renderer.RenderSuccess(repoPath))
-		}
+		wsRoot := cfg.WorkspaceRoot
+		projectPath := project.Path
 
-		if hookErr := hooks.PostClone(cfg.WorkspaceRoot, repoPath, success); hookErr != nil {
-			fmt.Println(renderer.RenderWarning(fmt.Sprintf("%s: post-clone hook failed: %v", repoPath, hookErr)))
+		jobs = append(jobs, engine.Job{
+			Label: repoPath,
+			Fn: func(ctx context.Context, notify engine.Notify) error {
+				return git.CloneWorkspace(ctx, wsRoot, projectPath, remotes, engine.WrapRunner(notify))
+			},
+		})
+	}
+
+	if len(jobs) == 0 {
+		return nil
+	}
+
+	opts := engine.DefaultOptions().
+		WithParallel(cfg.Parallel).
+		WithStopOnError(cfg.StopOnError)
+
+	eng := engine.NewEngine(opts)
+	events, resultCh := eng.RunJobs(context.Background(), jobs)
+
+	if isInteractive {
+		if err := engineui.Run(events, opts.Parallel, len(jobs)); err != nil {
+			slog.Error("UI error", "error", err)
 		}
+	} else {
+		engine.ConsumeVerbose(events)
+	}
+
+	execResult := <-resultCh
+
+	for _, label := range execResult.SuccessLabels() {
+		if hookErr := hooks.PostClone(cfg.WorkspaceRoot, label, true); hookErr != nil {
+			fmt.Println(renderer.RenderWarning(fmt.Sprintf("%s: post-clone hook failed: %v", label, hookErr)))
+		}
+	}
+
+	for _, label := range execResult.FailedLabels() {
+		if hookErr := hooks.PostClone(cfg.WorkspaceRoot, label, false); hookErr != nil {
+			fmt.Println(renderer.RenderWarning(fmt.Sprintf("%s: post-clone hook failed: %v", label, hookErr)))
+		}
+	}
+
+	if !isInteractive {
+		if execResult.HasErrors() {
+			for _, r := range execResult.Failed() {
+				renderer.RenderError(fmt.Sprintf("%s: %v", r.Label, r.Error))
+			}
+		}
+		renderer.RenderSuccess(fmt.Sprintf("Cloned %d repositories", execResult.SuccessCount()))
 	}
 
 	return nil

@@ -8,13 +8,13 @@ import (
 func Fetch(repoPath string) *Cmd {
 	slog.Debug("Fetching repository", "path", repoPath)
 
-	cmd := exec.Command("git", "fetch", "--all")
+	cmd := exec.Command("git", "fetch", "--all", "--progress")
 	cmd.Dir = repoPath
 	return (*Cmd)(cmd)
 }
 
 func Pull(repoPath string) *Cmd {
-	cmd := exec.Command("git", "pull", "--ff-only")
+	cmd := exec.Command("git", "pull", "--ff-only", "--progress")
 	cmd.Dir = repoPath
 	return (*Cmd)(cmd)
 }

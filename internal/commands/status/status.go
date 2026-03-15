@@ -1,6 +1,7 @@
 package status
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -75,50 +76,49 @@ func getStatuses(workspaceRoot string, projects []gws.Project, parallel int) []g
 	var mu sync.Mutex
 	statusMap := make(map[string]git.RepositoryStatus)
 
-	commands := make([]engine.RepoCommand, 0, len(projects))
+	jobs := make([]engine.Job, 0, len(projects))
 
 	for _, p := range projects {
 		repoPath := filepath.Join(workspaceRoot, p.Path)
 		projectPath := p.Path
 
-		cmd := engine.NewCustomCommand(
-			repoPath,
-			projectPath,
-			func() (string, error) {
+		jobs = append(jobs, engine.Job{
+			Label: projectPath,
+			Fn: func(ctx context.Context, notify engine.Notify) error {
 				status := git.GetStatus(repoPath)
 				status.Path = projectPath
 
 				data, err := json.Marshal(status)
 				if err != nil {
-					return "", err
+					return err
 				}
-				return string(data), nil
+
+				mu.Lock()
+				statusMap[projectPath] = status
+				mu.Unlock()
+
+				notify(engine.EventLog, string(data))
+				return nil
 			},
-		)
-		commands = append(commands, cmd)
+		})
 	}
 
-	result := engine.Execute(commands, engine.ExecuteOptions{
-		Parallel: parallel,
-		OnComplete: func(r engine.Result) {
-			if r.Success && r.Stdout != "" {
-				var status git.RepositoryStatus
-				if err := json.Unmarshal([]byte(r.Stdout), &status); err == nil {
-					mu.Lock()
-					statusMap[r.Command.RepoName] = status
-					mu.Unlock()
-				}
-			}
-		},
-	})
+	opts := engine.DefaultOptions().WithParallel(parallel)
+	eng := engine.NewEngine(opts)
+	events, resultCh := eng.RunJobs(context.Background(), jobs)
+
+	for range events {
+	}
+
+	result := <-resultCh
 
 	statuses := make([]git.RepositoryStatus, 0, len(projects))
 	for _, r := range result.Results {
-		if status, ok := statusMap[r.Command.RepoName]; ok {
+		if status, ok := statusMap[r.Label]; ok {
 			statuses = append(statuses, status)
 		} else {
 			statuses = append(statuses, git.RepositoryStatus{
-				Path:   r.Command.RepoName,
+				Path:   r.Label,
 				Exists: false,
 				Error:  r.Error,
 			})

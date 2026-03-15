@@ -1,6 +1,7 @@
 package add
 
 import (
+	"context"
 	"fmt"
 	"gogws/internal/git"
 	"gogws/internal/gws"
@@ -68,7 +69,7 @@ func runAdd(args []string) error {
 
 	if autoClone {
 		remotes := git.ToGitRemotes(projectToAdd.Remotes)
-		err := git.CloneWorkspace(ws.Root, projectToAdd.Path, remotes)
+		err := git.CloneWorkspace(context.Background(), ws.Root, projectToAdd.Path, remotes, nil)
 
 		if err != nil {
 			return fmt.Errorf("failed to clone repository: %w", err)

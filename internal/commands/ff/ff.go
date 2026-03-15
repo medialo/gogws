@@ -3,8 +3,8 @@ package ff
 import (
 	"context"
 	"fmt"
-	"gogws/internal/engine2"
 	"log/slog"
+	"os"
 	"path/filepath"
 
 	"gogws/internal/config"
@@ -13,8 +13,10 @@ import (
 	"gogws/internal/gws"
 	"gogws/internal/hooks"
 	"gogws/internal/ui/cli"
+	engineui "gogws/internal/ui/engineui"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 func NewCommand(getConfig func() *config.Config) *cobra.Command {
@@ -45,87 +47,78 @@ func runFF(getConfig func() *config.Config) error {
 		return fmt.Errorf("failed to load projects: %w", err)
 	}
 
-	renderer := cli.NewRenderer()
-	output := engine.NewOutputHandler(renderer, false)
-
-	// engine 2
-	enginedos := engine2.NewEngine(engine2.DefaultOptions())
-	commandsdos := make([]*engine2.EngineCommand, 0, len(ws.Projects))
+	jobs := make([]engine.Job, 0, len(ws.Projects))
+	var skippedJobs []engine.Result
 
 	slog.Debug("ff command: creating jobs", "workspace", cfg.WorkspaceRoot, "nbProjects", len(ws.Projects))
-	for _, p := range ws.Projects {
-		slog.Debug("preparing job \"gows ff\"", "project", p.Path)
+	for i, p := range ws.Projects {
 		repoPath := filepath.Join(cfg.WorkspaceRoot, p.Path)
 		status := git.GetStatus(repoPath)
 
-		cmd := engine2.EngineCommand(func(ctx context.Context, notify engine2.EngineCommandNotify) {
-			notify(engine2.LOG, "Start job > "+repoPath)
+		if !status.Exists {
+			skippedJobs = append(skippedJobs, engine.Result{
+				Label:      p.Path,
+				Success:    false,
+				Skipped:    true,
+				SkipReason: "not cloned yet",
+			})
+			continue
+		}
 
-			err := engine2.Wrap(git.Pull(repoPath).AsCmd()).Run(ctx, notify)
-			if err != nil {
-				return
-			}
-			//innerCmd := git.Pull(repoPath).AsCmd()
-			//r, err := innerCmd.StdoutPipe()
-			//if err != nil {
-			//	return
-			//}
-			//err = innerCmd.Start()
-			//if err != nil {
-			//	return
-			//}
-			//scanner := bufio.NewScanner(r)
-			//for scanner.Scan() {
-			//	//notify(engine2.LOG, scanner.Text())
-			//}
-			//err = innerCmd.Wait()
-			//if err != nil {
-			//	notify(engine2.ERR, fmt.Sprintf("failed to pull %s: %s", repoPath, err))
-			//}
-			notify(engine2.OK, "End job > "+repoPath)
+		path := repoPath
+		jobs = append(jobs, engine.Job{
+			Label: p.Path,
+			Fn: func(ctx context.Context, notify engine.Notify) error {
+				slog.Debug("preparing job \"gows ff\"", "project", path, "index", i)
+				engine.Wrap(git.Pull(path).AsCmd()).Run(ctx, notify)
+				return nil
+			},
 		})
+	}
 
-		if !status.Exists {
-			//skippedResults = append(skippedResults, engine2.Skip(cmd, "not cloned yet"))
-			continue
+	opts := engine.DefaultOptions().
+		WithParallel(cfg.Parallel).
+		WithStopOnError(cfg.StopOnError)
+
+	eng := engine.NewEngine(opts)
+	events, resultCh := eng.RunJobs(context.Background(), jobs)
+
+	isInteractive := term.IsTerminal(int(os.Stdout.Fd()))
+	//isInteractive = false // todo remove
+
+	if isInteractive {
+		if err := engineui.Run(events, opts.Parallel, len(jobs)); err != nil {
+			slog.Error("UI error", "error", err)
 		}
-
-		commandsdos = append(commandsdos, &cmd)
+	} else {
+		engine.ConsumeVerbose(events)
 	}
-	enginedos.RunJobs(context.Background(), commandsdos)
 
-	return nil
+	execResult := <-resultCh
 
-	// engine 1
-	commands := make([]engine.RepoCommand, 0, len(ws.Projects))
-	var skippedResults []engine.Result
+	for _, skipped := range skippedJobs {
+		execResult.AddResult(skipped)
+	}
 
-	for _, p := range ws.Projects {
-		repoPath := filepath.Join(cfg.WorkspaceRoot, p.Path)
-		status := git.GetStatus(repoPath)
-
-		cmd := engine.NewGitCommand(repoPath, p.Path, "pull", "--ff-only")
-		if !status.Exists {
-			skippedResults = append(skippedResults, engine.Skip(cmd, "not cloned yet"))
-			continue
+	if !isInteractive {
+		renderer := cli.NewRenderer()
+		if execResult.HasErrors() {
+			for _, r := range execResult.Failed() {
+				renderer.RenderError(fmt.Sprintf("%s: %v", r.Label, r.Error))
+			}
 		}
-
-		commands = append(commands, cmd)
+		renderer.RenderSuccess(fmt.Sprintf("Pulled %d repositories", execResult.SuccessCount()))
+		if execResult.SkippedCount() > 0 {
+			renderer.RenderWarning(fmt.Sprintf("Skipped %d repositories", execResult.SkippedCount()))
+		}
 	}
 
-	result := engine.Execute(commands, engine.ExecuteOptions{
-		Parallel:    cfg.Parallel,
-		StopOnError: cfg.StopOnError,
-	})
-
-	for _, r := range skippedResults {
-		result.AddResult(r)
-	}
-
-	output.RenderSummary(result, "Pulled")
-
-	if err := hooks.PostFF(cfg.WorkspaceRoot, result.SuccessCount()); err != nil {
+	if err := hooks.PostFF(cfg.WorkspaceRoot, execResult.SuccessCount()); err != nil {
 		return fmt.Errorf("post-ff hook failed: %w", err)
+	}
+
+	if execResult.HasErrors() {
+		return fmt.Errorf("%d repositories failed to pull", execResult.FailedCount())
 	}
 
 	return nil
