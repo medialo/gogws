@@ -1,4 +1,4 @@
-package gws
+package gws2
 
 import (
 	"bufio"
@@ -15,30 +15,6 @@ const (
 	ProjectsMode FolderModer = iota
 	WorkspacesMode
 )
-
-// hasFile checks if a file with the given name exists in the specified root directory.
-// It returns true if the file exists, and false otherwise.
-func hasFile(root, fileName string) bool {
-	path := filepath.Join(root, fileName)
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-func hasProjectsFile(root string) bool {
-	return hasFile(root, ProjectsFileName)
-}
-
-func hasProjectsFileInConfigDir(root string) bool {
-	return hasFile(filepath.Join(root, ConfigDirName), ProjectsFileName)
-}
-
-func hasWorkspacesFile(root string) bool {
-	return hasFile(root, WorkspacesFileName)
-}
-
-func hasWorkspacesFileInConfigDir(root string) bool {
-	return hasFile(filepath.Join(root, ConfigDirName), WorkspacesFileName)
-}
 
 type FileLocation struct {
 	Path         string
@@ -116,7 +92,7 @@ func getWorkspacesConfigFileLocation(root string) (bool, *FileLocation) {
 		}
 	}
 	return true, &FileLocation{
-		Path: 	   configDirPath,
+		Path:         configDirPath,
 		IsConfigDir:  true,
 		HasDuplicate: false,
 	}
@@ -261,8 +237,10 @@ func parseProjectLine(line string) (Project, error) {
 	}
 
 	project := Project{
-		Path:    path,
-		Remotes: make([]Remote, 0),
+		BaseRepository{
+			Path:    path,
+			Remotes: make([]*Remote, 0),
+		},
 	}
 
 	for i := 1; i < len(parts); i++ {
@@ -307,16 +285,18 @@ func parseWorkspaceLine(line string) (*Workspace, error) {
 	}
 
 	return &Workspace{
-		Path:   path,
-		Name:   filepath.Base(path),
-		Remote: remote,
+		BaseRepository: BaseRepository{
+			Path:    path,
+			Remotes: []*Remote{remote},
+		},
+		Name: filepath.Base(path),
 	}, nil
 }
 
-func parseRemote(remotePart string, index int) (Remote, error) {
+func parseRemote(remotePart string, index int) (*Remote, error) {
 	fields := strings.Fields(remotePart)
 	if len(fields) == 0 {
-		return Remote{}, fmt.Errorf("empty remote definition")
+		return &Remote{}, fmt.Errorf("empty remote definition")
 	}
 
 	url := fields[0]
@@ -333,7 +313,7 @@ func parseRemote(remotePart string, index int) (Remote, error) {
 		name = fields[1]
 	}
 
-	return Remote{
+	return &Remote{
 		Name: name,
 		URL:  url,
 	}, nil

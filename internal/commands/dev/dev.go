@@ -13,6 +13,7 @@ func NewCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(NewGenerateCommand())
+	cmd.AddCommand(NewPingCommand())
 
 	return cmd
 }

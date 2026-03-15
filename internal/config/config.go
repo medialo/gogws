@@ -9,8 +9,6 @@ import (
 
 type Config struct {
 	WorkspaceRoot string
-	ProjectsFile  string
-	IgnoreFile    string
 	ThemeFile     string
 	Parallel      int
 	Format        string
@@ -26,14 +24,15 @@ var (
 )
 
 func Initialize() error {
+	slog.Debug("Initializing configuration manager...")
+
 	configMu.Lock()
 	defer configMu.Unlock()
 
 	if initialized {
+		slog.Debug("Configuration manager already initialized")
 		return nil
 	}
-
-	slog.Debug("Initializing configuration manager...")
 
 	cfg, err := load()
 	if err != nil {
@@ -75,7 +74,7 @@ func Reload() error {
 	return Initialize()
 }
 
-func ApplyFlags(themeFile string, parallel int, format string, noColor, onlyChanges, stopOnError bool) {
+func ApplyFlags(themeFile string, parallel int, format string, noColor, onlyChanges, stopOnError bool, workingDir string) {
 	configMu.Lock()
 	defer configMu.Unlock()
 
@@ -92,6 +91,9 @@ func ApplyFlags(themeFile string, parallel int, format string, noColor, onlyChan
 	if format != "" {
 		globalConfig.Format = format
 	}
+	if workingDir != "" {
+		globalConfig.WorkspaceRoot = workingDir
+	}
 	globalConfig.NoColor = noColor
 	globalConfig.OnlyChanges = onlyChanges
 	globalConfig.StopOnError = stopOnError
@@ -99,10 +101,8 @@ func ApplyFlags(themeFile string, parallel int, format string, noColor, onlyChan
 
 func load() (*Config, error) {
 	cfg := &Config{
-		ProjectsFile: gws.ProjectsFileName,
-		IgnoreFile:   gws.IgnoreFileName,
-		Parallel:     gws.DefaultParallel,
-		Format:       "text",
+		Parallel: gws.DefaultParallel,
+		Format:   "text",
 	}
 
 	wsInfo, err := gws.FindRoot()

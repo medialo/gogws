@@ -3,6 +3,7 @@ package git
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +16,13 @@ type DiscoveredRepo struct {
 }
 
 func DiscoverRepositories(rootPath string, maxDepth int) ([]DiscoveredRepo, error) {
+	slog.Debug("Starting repository discovery", "rootPath", rootPath, "maxDepth", maxDepth)
+
 	var repos []DiscoveredRepo
+
+	if maxDepth < 1 {
+		maxDepth = 1
+	}
 
 	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -63,6 +70,7 @@ func DiscoverRepositories(rootPath string, maxDepth int) ([]DiscoveredRepo, erro
 		return nil, fmt.Errorf("failed to discover repositories: %w", err)
 	}
 
+	slog.Debug("Completed repository discovery", "count", len(repos))
 	return repos, nil
 }
 

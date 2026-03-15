@@ -121,7 +121,7 @@ func cloneProjects(workspaceRoot string, toClone []gws.Project, parallel int, st
 	commands := make([]engine.RepoCommand, 0, len(toClone))
 
 	for _, p := range toClone {
-		remotes := toGitRemotes(p.Remotes)
+		remotes := git.ToGitRemotes(p.Remotes)
 		wsRoot := workspaceRoot
 		projectPath := p.Path
 
@@ -139,12 +139,4 @@ func cloneProjects(workspaceRoot string, toClone []gws.Project, parallel int, st
 		Parallel:    parallel,
 		StopOnError: stopOnError,
 	})
-}
-
-func toGitRemotes(remotes []gws.Remote) []git.Remote {
-	result := make([]git.Remote, len(remotes))
-	for i, r := range remotes {
-		result[i] = git.Remote{Name: r.Name, URL: r.URL}
-	}
-	return result
 }

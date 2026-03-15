@@ -8,7 +8,7 @@ import (
 	"gogws/internal/gws"
 	"gogws/internal/theme"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 type Renderer struct {
@@ -48,36 +48,41 @@ func (r *Renderer) RenderStatus(statuses []git.RepositoryStatus, workspace *gws.
 	changed := 0
 	errors := 0
 
-	for _, status := range statuses {
-		if !status.Exists {
-			missing++
-			if !onlyChanges {
-				output.WriteString(r.renderMissingRepo(status) + "\n")
+	if len(statuses) > 0 {
+
+		for _, status := range statuses {
+			if !status.Exists {
+				missing++
+				if !onlyChanges {
+					output.WriteString(r.renderMissingRepo(status) + "\n")
+				}
+				continue
 			}
-			continue
-		}
 
-		if status.Error != nil {
-			errors++
-			output.WriteString(r.renderErrorRepo(status) + "\n")
-			continue
-		}
-
-		isClean := status.Clean && !r.hasAnyBranchChanges(status.Branches)
-
-		if isClean {
-			clean++
-			if !onlyChanges {
-				output.WriteString(r.renderRepo(status) + "\n")
+			if status.Error != nil {
+				errors++
+				output.WriteString(r.renderErrorRepo(status) + "\n")
+				continue
 			}
-			continue
-		}
 
-		changed++
-		output.WriteString(r.renderRepo(status) + "\n")
+			isClean := status.Clean && !r.hasAnyBranchChanges(status.Branches)
+
+			if isClean {
+				clean++
+				if !onlyChanges {
+					output.WriteString(r.renderRepo(status) + "\n")
+				}
+				continue
+			}
+
+			changed++
+			output.WriteString(r.renderRepo(status) + "\n")
+		}
+	} else {
+		output.WriteString(r.theme.Warning.Render("  No projects found in workspace"))
 	}
 
-	output.WriteString("\n")
+	output.WriteString("\n\n")
 	output.WriteString(r.renderSummary(len(statuses), clean, changed, missing, errors, len(workspaceEntries)))
 
 	return output.String()

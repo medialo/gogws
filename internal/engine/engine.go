@@ -91,7 +91,7 @@ func executeParallel(commands []RepoCommand, opts ExecuteOptions, parallel int) 
 	startTime := time.Now()
 
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, parallel)
+	sem := make(chan struct{}, min(parallel, len(commands)))
 	var mu sync.Mutex
 	var stopped atomic.Bool
 	var completedCount atomic.Int32
@@ -171,6 +171,10 @@ func executeSingleCommand(cmd RepoCommand, timeout time.Duration) Result {
 	return result
 }
 
+// Skip mark a command result as skipped with a reason.
+// This is used when a command is not executed due to some condition (e.g. no changes).
+// See this command like a friendly way to indicate that a command was intentionally not run, rather than it being an error or failure.
+// Return a Result with Success=false, Skipped=true, and the provided reason
 func Skip(cmd RepoCommand, reason string) Result {
 	return Result{
 		Command:    cmd,

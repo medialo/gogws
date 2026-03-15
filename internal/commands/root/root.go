@@ -22,6 +22,7 @@ var (
 	verbose     bool
 	trustHooks  string
 	stopOnError bool
+	workingDir  string
 )
 
 var rootCmd = &cobra.Command{
@@ -35,9 +36,9 @@ Compatible with gws project files (.projects.gws)`,
 	PersistentPreRunE: persistentPreRun,
 }
 
-func persistentPreRun(cmd *cobra.Command, args []string) error {
-	slog.Debug("persistentPreRun::")
+func persistentPreRun(cmd *cobra.Command, _ []string) error {
 	log.SetVerbose(verbose)
+	slog.Debug("Running PersistentPreRunE", "command", "root")
 	hooks.SetTrustMode(hooks.ParseTrustMode(trustHooks))
 
 	if cmd.Name() == "config" {
@@ -49,7 +50,7 @@ func persistentPreRun(cmd *cobra.Command, args []string) error {
 	}
 
 	if config.IsInitialized() {
-		config.ApplyFlags(themeFile, parallel, format, noColor, onlyChanges, stopOnError)
+		config.ApplyFlags(themeFile, parallel, format, noColor, onlyChanges, stopOnError, workingDir)
 	}
 
 	return nil
@@ -57,6 +58,8 @@ func persistentPreRun(cmd *cobra.Command, args []string) error {
 
 func NewCommand() *cobra.Command {
 	cobra.OnInitialize(initConfig)
+
+	cobra.EnableTraverseRunHooks = true
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: $HOME/.config/gogws/config.yaml)")
 	rootCmd.PersistentFlags().StringVar(&themeFile, "theme", "", "theme file")
@@ -67,11 +70,13 @@ func NewCommand() *cobra.Command {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
 	rootCmd.PersistentFlags().StringVar(&trustHooks, "trust-hooks", "ask", "trust mode for local hooks: ask, all, skip")
 	rootCmd.PersistentFlags().BoolVar(&stopOnError, "stop-on-error", false, "stop execution on first error")
+	rootCmd.PersistentFlags().StringVarP(&workingDir, "working-dir", "D", "", "set working directory for the command. Is not set the current directory is used")
 
 	viper.BindPFlag("theme", rootCmd.PersistentFlags().Lookup("theme"))
 	viper.BindPFlag("parallel", rootCmd.PersistentFlags().Lookup("parallel"))
 	viper.BindPFlag("format", rootCmd.PersistentFlags().Lookup("format"))
 	viper.BindPFlag("no_color", rootCmd.PersistentFlags().Lookup("no-color"))
+	viper.BindPFlag("working_dir", rootCmd.PersistentFlags().Lookup("working-dir"))
 
 	return rootCmd
 }

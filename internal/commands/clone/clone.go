@@ -68,7 +68,7 @@ func runClone(getConfig func() *config.Config, args []string) error {
 		slog.Debug("Cloning", "path", repoPath)
 		fmt.Println(renderer.RenderInfo(fmt.Sprintf("Cloning %s...", repoPath)))
 
-		remotes := toGitRemotes(project.Remotes)
+		remotes := git.ToGitRemotes(project.Remotes)
 		err := git.CloneWorkspace(cfg.WorkspaceRoot, project.Path, remotes)
 		success := err == nil
 		if err != nil {
@@ -83,12 +83,4 @@ func runClone(getConfig func() *config.Config, args []string) error {
 	}
 
 	return nil
-}
-
-func toGitRemotes(remotes []gws.Remote) []git.Remote {
-	result := make([]git.Remote, len(remotes))
-	for i, r := range remotes {
-		result[i] = git.Remote{Name: r.Name, URL: r.URL}
-	}
-	return result
 }

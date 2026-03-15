@@ -3,13 +3,14 @@ package gws
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-func AddProject(workspaceRoot string, project Project) error {
-	location := getProjectsFileLocation(workspaceRoot)
+func AddProject(workspaceRoot string, project *Project) error {
+	_, location := getProjectsConfigFileLocation(workspaceRoot)
 	if location == nil {
 		gwsDir := filepath.Join(workspaceRoot, ConfigDirName)
 		if err := os.MkdirAll(gwsDir, 0755); err != nil {
@@ -36,7 +37,7 @@ func AddProject(workspaceRoot string, project Project) error {
 }
 
 func RemoveProject(workspaceRoot string, projectPath string) error {
-	location := getProjectsFileLocation(workspaceRoot)
+	_, location := getProjectsConfigFileLocation(workspaceRoot)
 	if location == nil {
 		return fmt.Errorf("no projects file found")
 	}
@@ -51,8 +52,30 @@ func RemoveProject(workspaceRoot string, projectPath string) error {
 	})
 }
 
+func DeleteProjectsFile(workspaceRoot string) (string, error) {
+	slog.Debug("Resetting .projects.gws config", "workspaceRoot", workspaceRoot)
+	_, location := getProjectsConfigFileLocation(workspaceRoot)
+	if location == nil {
+		return "", fmt.Errorf("no projects file found")
+	}
+
+	if err := os.Remove(location.Path); err != nil {
+		return location.Path, fmt.Errorf("failed to delete projects file: %w", err)
+	}
+	return location.Path, nil
+}
+
+func AddWorkspaces(workspaceRoot string, workspaces []*Workspace) error {
+	for _, workspace := range workspaces {
+		if err := AddWorkspace(workspaceRoot, workspace); err != nil {
+			return fmt.Errorf("failed to add workspace %s: %w", workspace.Path, err)
+		}
+	}
+	return nil
+}
+
 func AddWorkspace(workspaceRoot string, ws *Workspace) error {
-	location := getWorkspacesFileLocation(workspaceRoot)
+	_, location := getWorkspacesConfigFileLocation(workspaceRoot)
 	if location == nil {
 		gwsDir := filepath.Join(workspaceRoot, ConfigDirName)
 		if err := os.MkdirAll(gwsDir, 0755); err != nil {
@@ -79,7 +102,7 @@ func AddWorkspace(workspaceRoot string, ws *Workspace) error {
 }
 
 func RemoveWorkspace(workspaceRoot string, workspacePath string) error {
-	location := getWorkspacesFileLocation(workspaceRoot)
+	_, location := getWorkspacesConfigFileLocation(workspaceRoot)
 	if location == nil {
 		return fmt.Errorf("no workspaces file found")
 	}
@@ -94,7 +117,21 @@ func RemoveWorkspace(workspaceRoot string, workspacePath string) error {
 	})
 }
 
-func formatProjectLine(project Project) string {
+// DeleteWorkspacesFile removes the workspaces configuration file.
+// It returns location if the file was found, "" if no file was found, and an error if there was an issue deleting the file.
+func DeleteWorkspacesFile(workspaceRoot string) (string, error) {
+	_, location := getWorkspacesConfigFileLocation(workspaceRoot)
+	if location == nil {
+		return "", fmt.Errorf("no workspaces file found")
+	}
+
+	if err := os.Remove(location.Path); err != nil {
+		return location.Path, fmt.Errorf("failed to delete workspaces file: %w", err)
+	}
+	return location.Path, nil
+}
+
+func formatProjectLine(project *Project) string {
 	var remoteParts []string
 	for _, remote := range project.Remotes {
 		if remote.Name == "origin" {

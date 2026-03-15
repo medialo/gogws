@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"gogws/internal/commands/add"
 	"gogws/internal/commands/check"
 	"gogws/internal/commands/clone"
 	"gogws/internal/commands/configcmd"
@@ -14,7 +15,7 @@ import (
 	"gogws/internal/commands/update"
 	"gogws/internal/commands/version"
 
-	"github.com/charmbracelet/fang"
+	"charm.land/fang/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -31,6 +32,7 @@ func Execute() error {
 	rootCmd.AddCommand(check.NewCommand(root.GetConfig))
 	rootCmd.AddCommand(initcmd.NewCommand(root.GetConfig))
 	rootCmd.AddCommand(update.NewCommand(root.GetConfig))
+	rootCmd.AddCommand(add.NewCommand())
 	rootCmd.AddCommand(configcmd.NewCommand())
 	rootCmd.AddCommand(dev.NewCommand())
 

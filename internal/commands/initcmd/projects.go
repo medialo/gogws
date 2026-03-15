@@ -2,12 +2,12 @@ package initcmd
 
 import (
 	"fmt"
+	"gogws/internal/config"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"gogws/internal/config"
 	"gogws/internal/git"
 	"gogws/internal/gitignore"
 	"gogws/internal/gws"
@@ -19,7 +19,6 @@ import (
 
 var (
 	resetProjectsGwsFile bool
-	generateGitignore    bool
 )
 
 func newProjectsCommand(getConfig func() *config.Config) *cobra.Command {
@@ -30,18 +29,57 @@ func newProjectsCommand(getConfig func() *config.Config) *cobra.Command {
 create a .gws/projects.gws file with all discovered repositories.
 
 By default, also generates a .gitignore file configured for GWS workspaces.`,
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			return preRunInitProjects(getConfig)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInitProjects(getConfig)
+			return runInitProjects()
+		},
+		PostRunE: func(cmd *cobra.Command, args []string) error {
+			return postRunInitProjects(getConfig)
 		},
 	}
 
-	cmd.Flags().BoolVar(&resetProjectsGwsFile, "reset", false, "reset existing projects.gws file if it exists")
-	cmd.Flags().BoolVar(&generateGitignore, "gitignore", true, "generate .gitignore file")
+	cmd.Flags().BoolVar(&resetProjectsGwsFile, "reset", false, "reset existing .projects.gws file if it exists")
+	cmd.Flags().BoolVar(&ignoreGitIgnoreGeneration, "no-gitignore", true, "do not generate .gitignore file")
 
 	return cmd
 }
 
-func runInitProjects(getConfig func() *config.Config) error {
+func preRunInitProjects(getConfig func() *config.Config) error {
+	if resetProjectsGwsFile {
+		cfg := getConfig()
+		slog.Debug("Resetting .projects.gws config", "resetProjectsGwsFile", resetProjectsGwsFile)
+		fileLocation, err := gws.DeleteProjectsFile(cfg.WorkspaceRoot)
+
+		if fileLocation != "" {
+			fmt.Println(renderer.RenderWarning("Removing projects configuration file..."))
+			if err != nil {
+				return fmt.Errorf("failed to remove configuration %s: %w", fileLocation, err)
+			}
+			fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Projects configuration file removed")))
+		} else {
+			fmt.Println(renderer.RenderError(fmt.Sprintf("%s already exists. Use --reset to reinitialize", gws.ProjectsFileName)))
+		}
+	}
+	return nil
+}
+
+func postRunInitProjects(getConfig func() *config.Config) error {
+	if !ignoreGitIgnoreGeneration {
+		workspaceRoot, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get current directory: %w", err)
+		}
+
+		if err := gitignore.EnsureGWSSection(workspaceRoot); err != nil {
+			fmt.Println(renderer.RenderWarning(fmt.Sprintf("Failed to generate .gitignore: %v", err)))
+		}
+	}
+	return nil
+}
+
+func runInitProjects() error {
 	workspaceRoot, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get current directory: %w", err)
@@ -128,14 +166,6 @@ func runInitProjects(getConfig func() *config.Config) error {
 	}
 
 	fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Created %s with %d repositories", projectsFile, len(projects))))
-
-	if generateGitignore {
-		if err := gitignore.EnsureGWSSection(workspaceRoot); err != nil {
-			fmt.Println(renderer.RenderWarning(fmt.Sprintf("Failed to generate .gitignore: %v", err)))
-		} else {
-			fmt.Println(renderer.RenderSuccess("Generated .gitignore"))
-		}
-	}
 
 	if err := hooks.PostInit(workspaceRoot, projectPaths); err != nil {
 		return fmt.Errorf("post-init hook failed: %w", err)

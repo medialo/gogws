@@ -1,11 +1,10 @@
-package gws
+package gws2
 
 import (
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 type Loader struct {
@@ -15,7 +14,17 @@ type Loader struct {
 	visited   map[string]bool
 }
 
-func New(path string) *Loader {
+func NewFromAutoRoot() (*Loader, error) {
+	path, err := FindRoot()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return NewFromPath(path), nil
+}
+
+func NewFromPath(path string) *Loader {
 	return &Loader{
 		root:      path,
 		recursive: true,
@@ -35,12 +44,9 @@ func (l *Loader) MaxDepth(depth int) *Loader {
 }
 
 func (l *Loader) Load() (*Workspace, error) {
-	start := time.Now()
-	ws, err := l.loadRecursive(l.root, 0)
-	duration := time.Since(start)
-	slog.Debug("Load completed", "duration", duration)
-	return ws, err
+	return l.loadRecursive(l.root, 0)
 }
+
 func (l *Loader) loadRecursive(root string, depth int) (*Workspace, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
@@ -61,11 +67,13 @@ func (l *Loader) loadRecursive(root string, depth int) (*Workspace, error) {
 	slog.Debug("Loading workspace", "depth", depth, "path", root)
 
 	ws := &Workspace{
+		BaseRepository: BaseRepository{
+			Path:   root,
+			Exists: false,
+		},
 		Root:     absRoot,
-		Path:     root,
 		Name:     filepath.Base(absRoot),
-		Exists:   true,
-		Projects: []Project{},
+		Projects: []*Project{},
 		Children: []*Workspace{},
 	}
 
@@ -83,10 +91,12 @@ func (l *Loader) loadRecursive(root string, depth int) (*Workspace, error) {
 			slog.Warn("Failed to read projects", "path", root, "err", err)
 		} else {
 			for _, p := range projects {
-				project := Project{
-					Path:    p.Path,
-					Remotes: p.Remotes,
-					Exists:  false,
+				project := &Project{
+					BaseRepository{
+						Path:    p.Path,
+						Remotes: p.Remotes,
+						Exists:  false,
+					},
 				}
 
 				projectPath := filepath.Join(absRoot, p.Path)
@@ -114,11 +124,13 @@ func (l *Loader) loadRecursive(root string, depth int) (*Workspace, error) {
 		} else {
 			for _, childRef := range childRefs {
 				child := &Workspace{
-					Path:     childRef.Path,
+					BaseRepository: BaseRepository{
+						Path:    childRef.Path,
+						Remotes: childRef.Remotes,
+						Exists:  false,
+					},
 					Name:     childRef.Name,
-					Remote:   childRef.Remote,
-					Exists:   false,
-					Projects: []Project{},
+					Projects: []*Project{},
 					Children: []*Workspace{},
 				}
 
@@ -162,37 +174,31 @@ func (l *Loader) loadRecursive(root string, depth int) (*Workspace, error) {
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
-func FindRoot() (*Workspace, error) {
-	return FindRootFromPath("")
-}
+var (
+	cachedRootDir string
+)
 
-func FindRootFromPath(dir string) (*Workspace, error) {
-	if dir == "" {
-		var err error
-		dir, err = os.Getwd()
-		if err != nil {
-			return nil, err
-		}
+func FindRoot() (string, error) {
+	if cachedRootDir != "" {
+		return cachedRootDir, nil
 	}
-	slog.Debug("Finding workspace root starting from", "dir", dir)
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
 
 	for {
 		hasProjects := hasProjectsFile(dir) || hasProjectsFileInConfigDir(dir)
 		hasWorkspaces := hasWorkspacesFile(dir) || hasWorkspacesFileInConfigDir(dir)
 
 		if hasProjects || hasWorkspaces {
-			slog.Debug("Workspace root found", "dir", dir, "hasProjects", hasProjects, "hasWorkspaces", hasWorkspaces)
-			return &Workspace{
-				Root:   dir,
-				Path:   dir,
-				Name:   filepath.Base(dir),
-				Exists: true,
-			}, nil
+			cachedRootDir = dir
+			return dir, nil
 		}
 
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return nil, fmt.Errorf("no workspace found (no %s or %s/%s file found in current or parent directories)",
+			return "", fmt.Errorf("no workspace found (no %s or %s/%s file found in current or parent directories)",
 				ProjectsFileName, ConfigDirName, "projects.gws")
 		}
 		dir = parent

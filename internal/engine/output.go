@@ -12,6 +12,7 @@ type OutputMode int
 const (
 	OutputModeStacked OutputMode = iota
 	OutputModeVerbose
+	OutputModeStream
 )
 
 type OutputHandler struct {
@@ -20,10 +21,11 @@ type OutputHandler struct {
 }
 
 func NewOutputHandler(renderer *cli.Renderer, verbose bool) *OutputHandler {
-	mode := OutputModeStacked
+	var mode OutputMode
 	if verbose {
 		mode = OutputModeVerbose
 	}
+	mode = OutputModeStacked
 	return &OutputHandler{
 		Mode:     mode,
 		Renderer: renderer,

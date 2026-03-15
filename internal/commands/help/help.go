@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/glamour/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +15,7 @@ func renderWithGlamour(text string) string {
 	}
 
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
+		//glamour.WithAutoStyle(),
 		glamour.WithWordWrap(120),
 		glamour.WithPreservedNewLines(),
 	)

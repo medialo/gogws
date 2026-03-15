@@ -15,4 +15,7 @@ const DefaultTemplate = `# GWS Workspace - ignore all sub-projects and workspace
 !{{.ProjectsFile}}
 !{{.WorkspacesFile}}
 !*.{{.Extension}}
+
+hash.gws
+{{.ConfigDir}}/hash.gws
 `

@@ -34,7 +34,7 @@ without affecting other rules.`,
 		},
 	}
 
-	cmd.Flags().BoolVar(&forceGitignore, "force", false, "force update even if GWS section already exists")
+	cmd.Flags().BoolVar(&forceGitignore, "force", false, "force update even if GWS section from .gitingore already exists")
 	cmd.Flags().BoolVar(&removeGitignore, "remove", false, "remove GWS section from .gitignore")
 
 	return cmd
