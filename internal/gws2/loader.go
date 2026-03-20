@@ -44,7 +44,11 @@ func (l *Loader) MaxDepth(depth int) *Loader {
 }
 
 func (l *Loader) Load() (*Workspace, error) {
-	return l.loadRecursive(l.root, 0)
+	ws, err := l.loadRecursive(l.root, 0)
+	if ws == nil || !ws.IsValid() {
+		return nil, fmt.Errorf("workspace is in invalid state, please run 'gogws doctor' to show diagnostics")
+	}
+	return ws, err
 }
 
 func (l *Loader) loadRecursive(root string, depth int) (*Workspace, error) {
@@ -155,7 +159,7 @@ func (l *Loader) loadRecursive(root string, depth int) (*Workspace, error) {
 		}
 	}
 
-	slog.Debug(" > Loaded workspace", "path", root, "projects", len(ws.Projects), "children", len(ws.Children))
+	slog.Debug(" > gws2 > Loaded workspace", "path", root, "projects", len(ws.Projects), "children", len(ws.Children))
 	return ws, nil
 }
 

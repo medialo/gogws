@@ -70,8 +70,7 @@ func runFF(getConfig func() *config.Config) error {
 			Label: p.Path,
 			Fn: func(ctx context.Context, notify engine.Notify) error {
 				slog.Debug("preparing job \"gows ff\"", "project", path, "index", i)
-				engine.Wrap(git.Pull(path).AsCmd()).Run(ctx, notify)
-				return nil
+				return engine.Wrap(git.Pull(path).AsCmd()).Run(ctx, notify)
 			},
 		})
 	}

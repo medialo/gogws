@@ -7,6 +7,7 @@ import (
 	"gogws/internal/commands/clone"
 	"gogws/internal/commands/configcmd"
 	"gogws/internal/commands/dev"
+	"gogws/internal/commands/doctor"
 	"gogws/internal/commands/fetch"
 	"gogws/internal/commands/ff"
 	"gogws/internal/commands/initcmd"
@@ -35,6 +36,7 @@ func Execute() error {
 	rootCmd.AddCommand(add.NewCommand())
 	rootCmd.AddCommand(configcmd.NewCommand())
 	rootCmd.AddCommand(dev.NewCommand())
+	rootCmd.AddCommand(doctor.NewDoctorCommand(root.GetConfig))
 
 	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
 		return statusCmd.RunE(cmd, args)

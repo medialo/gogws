@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os/exec"
 )
 
@@ -34,8 +35,13 @@ func Wrap(cmd *exec.Cmd) *NotifiableCmd {
 }
 
 func (nc *NotifiableCmd) Run(ctx context.Context, notify Notify) error {
+	var buf bytes.Buffer
 	stdout := &lineNotifyWriter{notify: func(s string) { notify(EventLog, s) }}
-	stderr := &lineNotifyWriter{notify: func(s string) { notify(EventLog, s) }}
+	stderr := &lineNotifyWriter{notify: func(s string) {
+		buf.WriteString(s)
+		buf.WriteString("\n")
+		notify(EventLog, s)
+	}}
 	nc.cmd.Stdout = stdout
 	nc.cmd.Stderr = stderr
 
@@ -48,7 +54,10 @@ func (nc *NotifiableCmd) Run(ctx context.Context, notify Notify) error {
 	stdout.Close()
 	stderr.Close()
 
-	return err
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("\uE0B0\uE0B0 %s %s \n> %w", nc.cmd.String(), &buf, err)
 }
 
 type lineNotifyWriter struct {

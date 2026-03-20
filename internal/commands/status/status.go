@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gogws/internal/gws2"
 	"log/slog"
 	"path/filepath"
 	"sync"
@@ -12,7 +13,6 @@ import (
 	"gogws/internal/engine"
 	"gogws/internal/export"
 	"gogws/internal/git"
-	"gogws/internal/gws"
 	"gogws/internal/ui/cli"
 
 	"github.com/spf13/cobra"
@@ -39,18 +39,33 @@ func runStatus(getConfig func() *config.Config) error {
 
 	slog.Debug("Running status command", "workspace", cfg.WorkspaceRoot)
 
-	ws, err := gws.New(cfg.WorkspaceRoot).Load()
+	ws2, err := gws2.NewFromPath(cfg.WorkspaceRoot).Load()
 	if err != nil {
-		return fmt.Errorf("failed to resolve workspace: %w", err)
+		return err
 	}
 
-	if len(ws.Projects) == 0 && len(ws.Children) == 0 {
+	if len(ws2.Projects) == 0 && len(ws2.Children) == 0 {
 		return fmt.Errorf("no projects or workspaces found")
 	}
 
-	slog.Debug("Found projects and workspaces", "projects", len(ws.Projects), "workspaces", len(ws.Children))
+	slog.Debug("Found projects and workspaces", "projects", len(ws2.Projects), "workspaces", len(ws2.Children))
 
-	statuses := getStatuses(cfg.WorkspaceRoot, ws.Projects, cfg.Parallel)
+	statuses := getStatuses(cfg.WorkspaceRoot, ws2.Projects, cfg.Parallel)
+
+	/*
+		ws, err := gws.New(cfg.WorkspaceRoot).Load()
+		if err != nil {
+			return fmt.Errorf("failed to resolve workspace: %w", err)
+		}
+
+		if len(ws.Projects) == 0 && len(ws.Children) == 0 {
+			return fmt.Errorf("no projects or workspaces found")
+		}
+
+		slog.Debug("Found projects and workspaces", "projects", len(ws.Projects), "workspaces", len(ws.Children))
+
+		statuses := getStatuses(cfg.WorkspaceRoot, ws.Projects, cfg.Parallel)
+	*/
 
 	if cfg.Format == "json" || cfg.Format == "yaml" {
 		output, err := export.Format(statuses, cfg.Format)
@@ -62,13 +77,13 @@ func runStatus(getConfig func() *config.Config) error {
 	}
 
 	renderer := cli.NewRenderer()
-	output := renderer.RenderStatus(statuses, ws, ws.Children, cfg.OnlyChanges)
+	output := renderer.RenderStatus(statuses, ws2, ws2.Children, cfg.OnlyChanges)
 	fmt.Println(output)
 
 	return nil
 }
 
-func getStatuses(workspaceRoot string, projects []gws.Project, parallel int) []git.RepositoryStatus {
+func getStatuses(workspaceRoot string, projects []*gws2.Project, parallel int) []git.RepositoryStatus {
 	if len(projects) == 0 {
 		return nil
 	}

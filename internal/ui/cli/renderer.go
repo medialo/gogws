@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"gogws/internal/gws2"
 	"strings"
 
 	"gogws/internal/git"
@@ -25,7 +26,7 @@ func (r *Renderer) RenderHeader(title string) string {
 	return r.theme.HeaderBox.Render(" " + title + " ")
 }
 
-func (r *Renderer) RenderStatus(statuses []git.RepositoryStatus, workspace *gws.Workspace, workspaceEntries []*gws.Workspace, onlyChanges bool) string {
+func (r *Renderer) RenderStatus(statuses []git.RepositoryStatus, workspace *gws2.Workspace, workspaceEntries []*gws2.Workspace, onlyChanges bool) string {
 	var output strings.Builder
 	output.WriteString(r.RenderHeader(fmt.Sprintf("GOGWS - Workspace Status - %s", workspace.Name)))
 	output.WriteString("\n\n")
@@ -97,7 +98,7 @@ func (r *Renderer) hasAnyBranchChanges(branches []git.BranchStatus) bool {
 	return false
 }
 
-func (r *Renderer) renderWorkspaceEntry(ws *gws.Workspace) string {
+func (r *Renderer) renderWorkspaceEntry(ws *gws2.Workspace) string {
 	var icon, status string
 
 	if ws.Error != nil {

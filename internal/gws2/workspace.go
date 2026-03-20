@@ -23,6 +23,14 @@ type Remote struct {
 //	gitRepository() bool
 //}
 
+type Repository interface {
+	GetPath() string
+}
+
+func (br *BaseRepository) GetPath() string {
+	return br.Path
+}
+
 type BaseRepository struct {
 	Path    string
 	Remotes []*Remote

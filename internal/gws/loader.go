@@ -143,7 +143,7 @@ func (l *Loader) loadRecursive(root string, depth int) (*Workspace, error) {
 		}
 	}
 
-	slog.Debug(" > Loaded workspace", "path", root, "projects", len(ws.Projects), "children", len(ws.Children))
+	slog.Debug(" > gws1 > Loaded workspace", "path", root, "projects", len(ws.Projects), "children", len(ws.Children))
 	return ws, nil
 }
 
@@ -174,7 +174,7 @@ func FindRootFromPath(dir string) (*Workspace, error) {
 			return nil, err
 		}
 	}
-	slog.Debug("Finding workspace root starting from", "dir", dir)
+	slog.Debug("Searching for workspace root", "location", dir)
 
 	for {
 		hasProjects := hasProjectsFile(dir) || hasProjectsFileInConfigDir(dir)
@@ -189,11 +189,12 @@ func FindRootFromPath(dir string) (*Workspace, error) {
 				Exists: true,
 			}, nil
 		}
+		slog.Debug("Search result", "dir", dir, "hasProjects", hasProjects, "hasWorkspaces", hasWorkspaces)
 
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return nil, fmt.Errorf("no workspace found (no %s or %s/%s file found in current or parent directories)",
-				ProjectsFileName, ConfigDirName, "projects.gws")
+			return nil, fmt.Errorf("no workspaces or projects found (no %s, %s or %s/... file found in current or parent directories)",
+				ProjectsFileName, WorkspacesFileName, ConfigDirName)
 		}
 		dir = parent
 	}

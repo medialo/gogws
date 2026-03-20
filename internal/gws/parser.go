@@ -19,6 +19,7 @@ const (
 // hasFile checks if a file with the given name exists in the specified root directory.
 // It returns true if the file exists, and false otherwise.
 func hasFile(root, fileName string) bool {
+	//slog.Debug("Searching for file", "location", root, "fileName", fileName)
 	path := filepath.Join(root, fileName)
 	_, err := os.Stat(path)
 	return err == nil
@@ -116,7 +117,7 @@ func getWorkspacesConfigFileLocation(root string) (bool, *FileLocation) {
 		}
 	}
 	return true, &FileLocation{
-		Path: 	   configDirPath,
+		Path:         configDirPath,
 		IsConfigDir:  true,
 		HasDuplicate: false,
 	}

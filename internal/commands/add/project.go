@@ -21,7 +21,7 @@ func newAddProjectCommand() *cobra.Command {
 		Long:  `Add a project or workspace to the current .projects.gws or .workspaces.gws file.`,
 		Args:  cobra.MaximumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAdd(args)
+			return runAddProject(args)
 		},
 	}
 
@@ -29,7 +29,7 @@ func newAddProjectCommand() *cobra.Command {
 	return cmd
 }
 
-func runAdd(args []string) error {
+func runAddProject(args []string) error {
 	ws, err := gws.FindRoot()
 
 	if err != nil {
