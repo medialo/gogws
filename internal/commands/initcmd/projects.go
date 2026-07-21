@@ -79,6 +79,7 @@ func postRunInitProjects(getConfig func() *config.Config) error {
 	return nil
 }
 
+// to migrate to gws2
 func runInitProjects() error {
 	workspaceRoot, err := os.Getwd()
 	if err != nil {

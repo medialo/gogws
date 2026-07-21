@@ -7,17 +7,18 @@ import (
 	"os/exec"
 )
 
+// Notify represent a func that can be call inside a job to send event
 type Notify func(eventType EventType, log string)
 
-type CommandFunc func(ctx context.Context, notify Notify) error
+type JobFunction func(ctx context.Context, notify Notify) error
 
 type Job struct {
-	Label string
-	Fn    CommandFunc
+	JobNameId string
+	Fn        JobFunction
 }
 
-func NewJob(label string, fn CommandFunc) Job {
-	return Job{Label: label, Fn: fn}
+func NewJob(label string, fn JobFunction) Job {
+	return Job{JobNameId: label, Fn: fn}
 }
 
 func WrapRunner(notify Notify) func(context.Context, *exec.Cmd) error {
@@ -34,13 +35,13 @@ func Wrap(cmd *exec.Cmd) *NotifiableCmd {
 	return &NotifiableCmd{cmd: cmd}
 }
 
-func (nc *NotifiableCmd) Run(ctx context.Context, notify Notify) error {
+func (nc *NotifiableCmd) Run(todo context.Context, notify Notify) error {
 	var buf bytes.Buffer
-	stdout := &lineNotifyWriter{notify: func(s string) { notify(EventLog, s) }}
+	stdout := &lineNotifyWriter{notify: func(s string) { notify(EventJobLog, s) }}
 	stderr := &lineNotifyWriter{notify: func(s string) {
 		buf.WriteString(s)
 		buf.WriteString("\n")
-		notify(EventLog, s)
+		notify(EventJobLog, s)
 	}}
 	nc.cmd.Stdout = stdout
 	nc.cmd.Stderr = stderr

@@ -2,7 +2,8 @@ package git
 
 import (
 	"gogws/internal/gws"
-	"gogws/internal/gws2"
+	"os"
+	"path/filepath"
 )
 
 func ToGitRemotes(remotes []gws.Remote) []Remote {
@@ -13,10 +14,19 @@ func ToGitRemotes(remotes []gws.Remote) []Remote {
 	return result
 }
 
-func ToGitRemotes2(remotes []gws2.Remote) []Remote {
-	result := make([]Remote, len(remotes))
-	for i, r := range remotes {
-		result[i] = Remote{Name: r.Name, URL: r.URL}
+//func ToGitRemotes2(remotes []gws2.Remote) []Remote {
+//	result := make([]Remote, len(remotes))
+//	for i, r := range remotes {
+//		result[i] = Remote{Name: r.Name, URL: r.URL}
+//	}
+//	return result
+//}
+
+func IsGitFolder(path string) bool {
+	gitDir := filepath.Join(path, ".git")
+	info, err := os.Stat(gitDir)
+	if err != nil {
+		return false
 	}
-	return result
+	return info.IsDir()
 }

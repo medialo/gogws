@@ -3,6 +3,7 @@ package fetch
 import (
 	"context"
 	"fmt"
+	"gogws/internal/gws2"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -10,7 +11,6 @@ import (
 	"gogws/internal/config"
 	"gogws/internal/engine"
 	"gogws/internal/git"
-	"gogws/internal/gws"
 	"gogws/internal/hooks"
 	"gogws/internal/ui/cli"
 	engineui "gogws/internal/ui/engineui"
@@ -42,33 +42,29 @@ func runFetch(getConfig func() *config.Config) error {
 
 	slog.Debug("Running fetch command", "workspace", cfg.WorkspaceRoot)
 
-	ws, err := gws.New(cfg.WorkspaceRoot).Recursive(false).Load()
+	//ws, err := gws.New(cfg.WorkspaceRoot).Recursive(false).Load()
+	ws, err := gws2.NewFromPath(cfg.WorkspaceRoot).Recursive(false).Load()
 	if err != nil {
 		return fmt.Errorf("failed to load projects: %w", err)
 	}
 
 	jobs := make([]engine.Job, 0, len(ws.Projects))
-	var skippedJobs []engine.Result
+	var skippedJobs []engine.JobResult
 
 	for _, p := range ws.Projects {
 		repoPath := filepath.Join(cfg.WorkspaceRoot, p.Path)
-		status := git.GetStatus(repoPath)
 
-		if !status.Exists {
-			skippedJobs = append(skippedJobs, engine.Result{
-				Label:      p.Path,
-				Success:    false,
-				Skipped:    true,
-				SkipReason: "not cloned yet",
-			})
-			continue
-		}
-
-		path := repoPath
 		jobs = append(jobs, engine.Job{
-			Label: p.Path,
+			JobNameId: p.Path,
 			Fn: func(ctx context.Context, notify engine.Notify) error {
-				return engine.Wrap(git.Fetch(path).AsCmd()).Run(ctx, notify)
+				notify(engine.EventJobLog, "Checking if project is cloned...")
+				status := git.GetStatus(repoPath)
+				if !status.Exists {
+					ctx.Done()
+					return nil
+				}
+				notify(engine.EventJobLog, "Fetching...")
+				return engine.Wrap(git.Fetch(repoPath).AsCmd()).Run(ctx, notify)
 			},
 		})
 	}
@@ -78,16 +74,16 @@ func runFetch(getConfig func() *config.Config) error {
 		WithStopOnError(cfg.StopOnError)
 
 	eng := engine.NewEngine(opts)
-	events, resultCh := eng.RunJobs(context.Background(), jobs)
+	eventsCh, resultCh := eng.RunJobs(context.Background(), jobs)
 
 	isInteractive := term.IsTerminal(int(os.Stdout.Fd()))
 
 	if isInteractive {
-		if err := engineui.Run(events, opts.Parallel, len(jobs)); err != nil {
+		if err := engineui.Run(eventsCh, opts.Parallel, len(jobs)); err != nil {
 			slog.Error("UI error", "error", err)
 		}
 	} else {
-		engine.ConsumeVerbose(events)
+		engine.ConsumeVerbose(eventsCh)
 	}
 
 	execResult := <-resultCh
@@ -100,7 +96,7 @@ func runFetch(getConfig func() *config.Config) error {
 		renderer := cli.NewRenderer()
 		if execResult.HasErrors() {
 			for _, r := range execResult.Failed() {
-				renderer.RenderError(fmt.Sprintf("%s: %v", r.Label, r.Error))
+				renderer.RenderError(fmt.Sprintf("%s: %v", r.JobId, r.Error))
 			}
 		}
 		renderer.RenderSuccess(fmt.Sprintf("Fetched %d repositories", execResult.SuccessCount()))

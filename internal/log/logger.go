@@ -3,46 +3,74 @@ package log
 import (
 	"log/slog"
 	"os"
+	"strconv"
+	"time"
 
-	"charm.land/lipgloss/v2"
 	"charm.land/log/v2"
-	"github.com/dpotapov/slogpfx"
+	"golang.org/x/term"
 )
 
 var (
 	baseHandler *log.Logger
 	logger      *slog.Logger
+	f           *os.File
+)
+
+const (
+	DebugLevel1 = slog.LevelDebug
+	DebugLevel2 = slog.Level(-10)
+	DebugLevel3 = slog.Level(-14)
 )
 
 func init() {
-	styles := log.DefaultStyles()
-	styles.Prefix = lipgloss.NewStyle().Foreground(lipgloss.Color("255"))
-	styles.Levels[log.DebugLevel].
-		Background(lipgloss.Color("63")).
-		Foreground(lipgloss.Color("0"))
 
 	baseHandler = log.NewWithOptions(os.Stderr, log.Options{
 		ReportTimestamp: false,
 	})
-	baseHandler.SetStyles(styles)
+
 	baseHandler.SetLevel(log.InfoLevel)
 	baseHandler.SetReportCaller(true)
 
-	prefixedHandler := slogpfx.NewHandler(baseHandler, &slogpfx.HandlerOptions{
-		PrefixKeys: []string{"context", "workspace", "project"},
-		//PrefixFormatter: func(prefixes []slog.Value) string {
-		//	return ""
-		//},
-	})
-
-	logger = slog.New(prefixedHandler)
+	logger = slog.New(baseHandler)
 	slog.SetDefault(logger)
 }
 
-func SetVerbose(v bool) {
-	if v {
-		baseHandler.SetLevel(log.DebugLevel)
-	} else {
+func SetVerbose(verbosity int) {
+	switch verbosity {
+	case 1:
+		baseHandler.SetLevel(log.Level(DebugLevel1))
+	case 2:
+		baseHandler.SetLevel(log.Level(DebugLevel2))
+	case 3:
+		baseHandler.SetLevel(log.Level(DebugLevel3))
+	default:
 		baseHandler.SetLevel(log.InfoLevel)
+	}
+
+	if verbosity > 0 {
+		isInteractive := term.IsTerminal(int(os.Stdout.Fd())) // todo centralized isInteractive value to allow --interactive or --no
+
+		if isInteractive {
+			slog.Debug("You are running gogws in verbose mode and with an interactive terminal. Logs will be written to a file.")
+			currTime := time.Now()
+			epoch := currTime.Unix()
+			formatedTime := currTime.Format("2006-01-02")
+			fileName := "gogws_" + formatedTime + "_" + strconv.FormatInt(epoch, 10) + ".log"
+			var err error
+			f, err = os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+			if err != nil {
+				panic(err)
+			}
+			baseHandler.SetOutput(f)
+		}
+	}
+}
+
+func Close() {
+	if f != nil {
+		err := f.Close()
+		if err != nil {
+			panic(err)
+		}
 	}
 }

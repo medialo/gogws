@@ -2,9 +2,12 @@ package config
 
 import (
 	"log/slog"
+	"os"
 	"sync"
 
 	"gogws/internal/gws"
+
+	"golang.org/x/term"
 )
 
 type Config struct {
@@ -15,6 +18,7 @@ type Config struct {
 	NoColor       bool
 	OnlyChanges   bool
 	StopOnError   bool
+	IsInteractive bool
 }
 
 var (
@@ -97,14 +101,17 @@ func ApplyFlags(themeFile string, parallel int, format string, noColor, onlyChan
 	globalConfig.NoColor = noColor
 	globalConfig.OnlyChanges = onlyChanges
 	globalConfig.StopOnError = stopOnError
+	slog.Debug("Configuration updated", "config", globalConfig)
 }
 
 func load() (*Config, error) {
 	cfg := &Config{
-		Parallel: gws.DefaultParallel,
-		Format:   "text",
+		Parallel:      gws.DefaultParallel,
+		Format:        "text",
+		IsInteractive: term.IsTerminal(int(os.Stdout.Fd())),
 	}
 
+	// todo is -d use to find root or if -d is present, is considered as root without check
 	wsInfo, err := gws.FindRoot()
 	if err != nil {
 		return nil, err

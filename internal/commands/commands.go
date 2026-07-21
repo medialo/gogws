@@ -15,12 +15,17 @@ import (
 	"gogws/internal/commands/status"
 	"gogws/internal/commands/update"
 	"gogws/internal/commands/version"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"charm.land/fang/v2"
 	"github.com/spf13/cobra"
 )
 
 func Execute() error {
+	slog.Debug("Starting gogws")
 	rootCmd := root.NewCommand()
 
 	statusCmd := status.NewCommand(root.GetConfig)
@@ -41,6 +46,15 @@ func Execute() error {
 	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
 		return statusCmd.RunE(cmd, args)
 	}
+
+	defer root.StopProfiling()
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		root.StopProfiling()
+		os.Exit(1)
+	}()
 
 	return fang.Execute(context.Background(), rootCmd)
 }

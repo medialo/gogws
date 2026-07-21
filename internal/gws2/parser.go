@@ -9,96 +9,7 @@ import (
 	"strings"
 )
 
-type FolderModer int
-
-const (
-	ProjectsMode FolderModer = iota
-	WorkspacesMode
-)
-
-type FileLocation struct {
-	Path         string
-	IsConfigDir  bool
-	HasDuplicate bool
-}
-
-func getConfigFileLocation(root string, mode FolderModer) (bool, *FileLocation) {
-	switch mode {
-	case ProjectsMode:
-		return getProjectsConfigFileLocation(root)
-	case WorkspacesMode:
-		return getWorkspacesConfigFileLocation(root)
-	default:
-		return false, nil
-	}
-}
-
-// getProjectsConfigFileLocation checks for the presence of the projects configuration
-// file in both the config directory and the legacy location.
-// It returns a FileLocation struct indicating where the file is located and whether there are duplicates.
-func getProjectsConfigFileLocation(root string) (bool, *FileLocation) {
-	// Check for projects file in config directory first, then legacy location
-	// <root>/.gws/projects.gws
-	configDirPath := filepath.Join(root, ConfigDirName, ProjectsFileName)
-	// <root>/projects.gws
-	legacyPath := filepath.Join(root, ProjectsFileName)
-
-	hasConfigDir := hasFile(filepath.Join(root, ConfigDirName), ProjectsFileName)
-	hasLegacy := hasFile(root, ProjectsFileName)
-
-	if hasConfigDir {
-		return false, &FileLocation{
-			Path:         configDirPath,
-			IsConfigDir:  true,
-			HasDuplicate: hasLegacy,
-		}
-	}
-	if hasLegacy {
-		return false, &FileLocation{
-			Path:         legacyPath,
-			IsConfigDir:  false,
-			HasDuplicate: false,
-		}
-	}
-	return true, &FileLocation{
-		Path:         configDirPath,
-		IsConfigDir:  true,
-		HasDuplicate: false,
-	}
-}
-
-func getWorkspacesConfigFileLocation(root string) (bool, *FileLocation) {
-	// Check for workspaces file in config directory first, then legacy location
-	// <root>/.gws/workspaces.gws
-	configDirPath := filepath.Join(root, ConfigDirName, WorkspacesFileName)
-	// <root>/workspaces.gws
-	legacyPath := filepath.Join(root, WorkspacesFileName)
-
-	hasConfigDir := hasFile(filepath.Join(root, ConfigDirName), WorkspacesFileName)
-	hasLegacy := hasFile(root, WorkspacesFileName)
-
-	if hasConfigDir {
-		return false, &FileLocation{
-			Path:         configDirPath,
-			IsConfigDir:  true,
-			HasDuplicate: hasLegacy,
-		}
-	}
-	if hasLegacy {
-		return false, &FileLocation{
-			Path:         legacyPath,
-			IsConfigDir:  false,
-			HasDuplicate: false,
-		}
-	}
-	return true, &FileLocation{
-		Path:         configDirPath,
-		IsConfigDir:  true,
-		HasDuplicate: false,
-	}
-}
-
-func parseProjectsFile(root string) ([]Project, error) {
+func parseProjectsFile(root string) ([]*Project, error) {
 	_, location := getProjectsConfigFileLocation(root)
 	if location == nil {
 		return nil, fmt.Errorf("no projects file found")
@@ -112,7 +23,7 @@ func parseProjectsFile(root string) ([]Project, error) {
 	}
 	defer file.Close()
 
-	var projects []Project
+	var projects []*Project
 	scanner := bufio.NewScanner(file)
 	lineNum := 0
 
@@ -128,11 +39,12 @@ func parseProjectsFile(root string) ([]Project, error) {
 			line = strings.TrimSpace(line[:idx])
 		}
 
-		project, err := parseProjectLine(line)
+		project, err := parseProjectLine(root, line)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing line %d: %w", lineNum, err)
 		}
 
+		project.id = lineNum
 		projects = append(projects, project)
 	}
 
@@ -185,7 +97,7 @@ func parseWorkspacesFile(root string) ([]*Workspace, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error parsing line %d in %s: %w", lineNum, WorkspacesFileName, err)
 		}
-
+		ws.id = lineNum
 		workspaces = append(workspaces, ws)
 	}
 
@@ -225,21 +137,25 @@ func parseIgnoreFile(root string) ([]string, error) {
 	return patterns, nil
 }
 
-func parseProjectLine(line string) (Project, error) {
+func parseProjectLine(root string, line string) (*Project, error) {
 	parts := strings.Split(line, "|")
 	if len(parts) < 2 {
-		return Project{}, fmt.Errorf("invalid format: expected 'path | url [name] [| url2 name2 ...]'")
+		return &Project{}, fmt.Errorf("invalid format: expected 'path | url [name] [| url2 name2 ...]'")
 	}
 
-	path := strings.TrimSpace(parts[0])
+	path := filepath.Join(root, strings.TrimSpace(parts[0]))
 	if path == "" {
-		return Project{}, fmt.Errorf("empty project path")
+		return &Project{}, fmt.Errorf("empty project path")
 	}
 
-	project := Project{
-		BaseRepository{
-			Path:    path,
-			Remotes: make([]*Remote, 0),
+	project := &Project{
+		GitRepository: GitRepository{
+			Path:          path,
+			Remotes:       make([]*Remote, 0),
+			Name:          filepath.Base(path),
+			Type:          RepositoryTypeProject,
+			gitRepository: true,
+			FolderExists:  false, // no tested here
 		},
 	}
 
@@ -251,13 +167,13 @@ func parseProjectLine(line string) (Project, error) {
 
 		remote, err := parseRemote(remotePart, i-1)
 		if err != nil {
-			return Project{}, err
+			return &Project{}, err
 		}
 		project.Remotes = append(project.Remotes, remote)
 	}
 
 	if len(project.Remotes) == 0 {
-		return Project{}, fmt.Errorf("no remotes defined for project %s", path)
+		return &Project{}, fmt.Errorf("no remotes defined for project %s", path)
 	}
 
 	return project, nil
@@ -285,11 +201,16 @@ func parseWorkspaceLine(line string) (*Workspace, error) {
 	}
 
 	return &Workspace{
-		BaseRepository: BaseRepository{
-			Path:    path,
-			Remotes: []*Remote{remote},
+		GitRepository: GitRepository{
+			Path:          path,
+			Remotes:       []*Remote{remote},
+			Name:          filepath.Base(path),
+			Type:          RepositoryTypeWorkspace,
+			FolderExists:  false,
+			gitRepository: true, // read from gws config file so is expected to be a git repository
 		},
-		Name: filepath.Base(path),
+		Projects: []*Project{},
+		Children: []*Workspace{},
 	}, nil
 }
 
@@ -319,7 +240,7 @@ func parseRemote(remotePart string, index int) (*Remote, error) {
 	}, nil
 }
 
-func filterIgnoredProjects(projects []Project, patterns []string) []Project {
+func filterIgnoredProjects(projects []*Project, patterns []string) []*Project {
 	if len(patterns) == 0 {
 		return projects
 	}
@@ -331,7 +252,7 @@ func filterIgnoredProjects(projects []Project, patterns []string) []Project {
 		}
 	}
 
-	filtered := make([]Project, 0, len(projects))
+	filtered := make([]*Project, 0, len(projects))
 	for _, project := range projects {
 		ignored := false
 		for _, re := range regexps {

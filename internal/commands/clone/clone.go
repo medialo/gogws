@@ -80,7 +80,7 @@ func runClone(getConfig func() *config.Config, args []string) error {
 		projectPath := project.Path
 
 		jobs = append(jobs, engine.Job{
-			Label: repoPath,
+			JobNameId: repoPath,
 			Fn: func(ctx context.Context, notify engine.Notify) error {
 				return git.CloneWorkspace(ctx, wsRoot, projectPath, remotes, engine.WrapRunner(notify))
 			},
@@ -123,7 +123,7 @@ func runClone(getConfig func() *config.Config, args []string) error {
 	if !isInteractive {
 		if execResult.HasErrors() {
 			for _, r := range execResult.Failed() {
-				renderer.RenderError(fmt.Sprintf("%s: %v", r.Label, r.Error))
+				renderer.RenderError(fmt.Sprintf("%s: %v", r.JobId, r.Error))
 			}
 		}
 		renderer.RenderSuccess(fmt.Sprintf("Cloned %d repositories", execResult.SuccessCount()))

@@ -2,6 +2,7 @@ package gws2
 
 import (
 	"fmt"
+	"gogws/internal/git"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ type Loader struct {
 	root      string
 	recursive bool
 	maxDepth  int
+	runDoctor bool
 	visited   map[string]bool
 }
 
@@ -29,8 +31,14 @@ func NewFromPath(path string) *Loader {
 		root:      path,
 		recursive: true,
 		maxDepth:  DefaultMaxDepth,
+		runDoctor: true,
 		visited:   make(map[string]bool),
 	}
+}
+
+func (l *Loader) RunDoctor(enabled bool) *Loader {
+	l.runDoctor = enabled
+	return l
 }
 
 func (l *Loader) Recursive(enabled bool) *Loader {
@@ -44,24 +52,34 @@ func (l *Loader) MaxDepth(depth int) *Loader {
 }
 
 func (l *Loader) Load() (*Workspace, error) {
+	slog.Debug("Loading workspace loader...", "path", l.root)
 	ws, err := l.loadRecursive(l.root, 0)
-	if ws == nil || !ws.IsValid() {
+	if ws == nil || (l.runDoctor && !ws.IsValid()) {
 		return nil, fmt.Errorf("workspace is in invalid state, please run 'gogws doctor' to show diagnostics")
 	}
+	slog.Debug("Found projects and workspaces", "projects", len(ws.Projects), "workspaces", len(ws.Children), "rootIsGit", ws.isGitRepository())
 	return ws, err
 }
 
 func (l *Loader) loadRecursive(root string, depth int) (*Workspace, error) {
-	absRoot, err := filepath.Abs(root)
+
+	actualRoot, err := os.Getwd()
+	err = os.Chdir(root)
 	if err != nil {
 		return nil, err
 	}
+	defer func(dir string) {
+		err := os.Chdir(dir)
+		if err != nil {
 
-	if l.visited[absRoot] {
-		slog.Debug("Skipping already visited workspace", "path", absRoot)
+		}
+	}(actualRoot)
+
+	if l.visited[root] {
+		slog.Debug("Skipping already visited workspace", "path", root)
 		return nil, nil
 	}
-	l.visited[absRoot] = true
+	l.visited[root] = true
 
 	if depth > l.maxDepth {
 		slog.Warn("Maximum workspace depth reached", "path", root)
@@ -71,90 +89,78 @@ func (l *Loader) loadRecursive(root string, depth int) (*Workspace, error) {
 	slog.Debug("Loading workspace", "depth", depth, "path", root)
 
 	ws := &Workspace{
-		BaseRepository: BaseRepository{
-			Path:   root,
-			Exists: false,
+		GitRepository: GitRepository{
+			id:            -1,
+			Path:          root,
+			FolderExists:  true,
+			Name:          filepath.Base(root),
+			gitRepository: git.IsGitFolder(root),
 		},
-		Root:     absRoot,
-		Name:     filepath.Base(absRoot),
 		Projects: []*Project{},
 		Children: []*Workspace{},
 	}
 
-	_, projectsLocation := getProjectsConfigFileLocation(absRoot)
+	_, projectsLocation := getProjectsConfigFileLocation(root)
 	if projectsLocation != nil {
 		if projectsLocation.HasDuplicate {
-			legacyPath := filepath.Join(absRoot, ProjectsFileName)
+			legacyPath := filepath.Join(root, ProjectsFileName)
 			slog.Warn("Duplicate projects file found - using .gws/projects.gws, please remove the legacy file",
 				"legacy", legacyPath,
 				"used", projectsLocation.Path)
 		}
 
-		projects, err := parseProjectsFile(absRoot)
+		projects, err := parseProjectsFile(root)
 		if err != nil {
 			slog.Warn("Failed to read projects", "path", root, "err", err)
 		} else {
 			for _, p := range projects {
-				project := &Project{
-					BaseRepository{
-						Path:    p.Path,
-						Remotes: p.Remotes,
-						Exists:  false,
-					},
-				}
-
-				projectPath := filepath.Join(absRoot, p.Path)
+				projectPath := filepath.Join(root, p.Path)
 				if _, err := os.Stat(projectPath); err == nil {
-					project.Exists = true
+					p.FolderExists = true
+				} else {
+					p.FolderExists = false
 				}
-
-				ws.Projects = append(ws.Projects, project)
+				ws.Projects = append(ws.Projects, p)
 			}
 		}
 	}
 
-	_, workspacesLocation := getWorkspacesConfigFileLocation(absRoot)
+	_, workspacesLocation := getWorkspacesConfigFileLocation(root)
 	if workspacesLocation != nil {
 		if workspacesLocation.HasDuplicate {
-			legacyPath := filepath.Join(absRoot, WorkspacesFileName)
+			legacyPath := filepath.Join(root, WorkspacesFileName)
 			slog.Warn("Duplicate workspaces file found - using .gws/workspaces.gws, please remove the legacy file",
 				"legacy", legacyPath,
 				"used", workspacesLocation.Path)
 		}
 
-		childRefs, err := parseWorkspacesFile(absRoot)
+		childRefs, err := parseWorkspacesFile(root)
 		if err != nil {
 			slog.Warn("Failed to read workspaces", "path", root, "err", err)
 		} else {
-			for _, childRef := range childRefs {
-				child := &Workspace{
-					BaseRepository: BaseRepository{
-						Path:    childRef.Path,
-						Remotes: childRef.Remotes,
-						Exists:  false,
-					},
-					Name:     childRef.Name,
-					Projects: []*Project{},
-					Children: []*Workspace{},
+			for _, childRepository := range childRefs {
+				if childRepository.Path == "." { // skip current workspace already added
+					continue
 				}
-
-				wsPath := filepath.Join(absRoot, childRef.Path)
-				if _, err := os.Stat(wsPath); err == nil {
-					child.Exists = true
+				nextRootPath := filepath.Join(root, childRepository.Path)
+				if _, err := os.Stat(nextRootPath); err == nil {
+					childRepository.FolderExists = true
 
 					if l.recursive {
-						resolved, err := l.loadRecursive(wsPath, depth+1)
+						resolved, err := l.loadRecursive(nextRootPath, depth+1)
 						if err != nil {
-							child.Error = err
+							childRepository.Error = err
 						} else if resolved != nil {
-							child.Root = resolved.Root
-							child.Projects = resolved.Projects
-							child.Children = resolved.Children
+							//childRepository.Root = resolved.Root
+							//childRepository.Projects = resolved.Projects
+							//childRepository.Children = resolved.Children
+							ws.Children = append(ws.Children, resolved)
 						}
 					}
+				} else {
+					ws.Children = append(ws.Children, childRepository)
 				}
 
-				ws.Children = append(ws.Children, child)
 			}
 		}
 	}

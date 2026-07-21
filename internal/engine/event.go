@@ -4,21 +4,25 @@ type EventType int
 
 const (
 	EventJobStart EventType = iota
-	EventLog
-	EventErr
+	EventJobLog             // this event will be used to display string at right of job
+	EventJobErr
 	EventJobEnd
+	EventJobSkipped
+	EventSlog // todo fusionner le slog et le log ?
 )
 
 func (e EventType) String() string {
 	switch e {
 	case EventJobStart:
 		return "JOB_START"
-	case EventLog:
+	case EventJobLog:
 		return "LOG"
-	case EventErr:
+	case EventJobErr:
 		return "ERR"
 	case EventJobEnd:
 		return "JOB_END"
+	case EventJobSkipped:
+		return "JOB_SKIPPED"
 	default:
 		return "UNKNOWN"
 	}
@@ -27,7 +31,7 @@ func (e EventType) String() string {
 type Event struct {
 	GoroutineID int
 	Type        EventType
-	JobLabel    string
+	JobNameId   string
 	Log         string
 	Err         error
 	Success     bool
@@ -42,9 +46,9 @@ func (e Event) IsEnd() bool {
 }
 
 func (e Event) IsLog() bool {
-	return e.Type == EventLog
+	return e.Type == EventJobLog
 }
 
 func (e Event) IsErr() bool {
-	return e.Type == EventErr
+	return e.Type == EventJobErr
 }

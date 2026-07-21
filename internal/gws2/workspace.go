@@ -6,6 +6,14 @@ import (
 	"strings"
 )
 
+type RepositoryType int
+
+//go:generate enumer -type=RepositoryType -trimprefix RepositoryType
+const (
+	RepositoryTypeProject RepositoryType = iota
+	RepositoryTypeWorkspace
+)
+
 type ConfigFile struct {
 	Path   string
 	Legacy bool
@@ -16,40 +24,89 @@ type Remote struct {
 	URL  string
 }
 
-//type IBAseRepository interface {
-//	Path() string
-//	Remotes() []*Remote
-//	Exists() bool
-//	gitRepository() bool
-//}
-
 type Repository interface {
+	Id() int
 	GetPath() string
+	GetName() string
+	GetType() RepositoryType
+	IsGitRepository() bool
 }
 
-func (br *BaseRepository) GetPath() string {
-	return br.Path
+func (gr *GitRepository) Id() int {
+	return gr.id
 }
 
-type BaseRepository struct {
-	Path    string
-	Remotes []*Remote
-	Exists  bool
+func (gr *GitRepository) GetPath() string {
+	return gr.Path
+}
+
+func (gr *GitRepository) GetName() string {
+	return gr.Name
+}
+
+func (gr *GitRepository) GetType() RepositoryType {
+	return gr.Type
+}
+
+func (gr *GitRepository) IsGitRepository() bool {
+	return gr.gitRepository
+}
+
+type GitRepository struct {
+	id            int
+	Path          string // Path of the repository from the gws config file, can be ".", use GetPath() to get real path
+	Name          string // Name represents the name of the Git repository based on the last part of the path
+	Remotes       []*Remote
+	FolderExists  bool
+	gitRepository bool
+	Type          RepositoryType
 }
 
 type Project struct {
-	BaseRepository
+	GitRepository
 }
 
 type Workspace struct {
-	BaseRepository
-	Root                string
-	Name                string
+	GitRepository
 	Error               error
 	Projects            []*Project
 	Children            []*Workspace
 	WorkspaceConfigFile *ConfigFile
 	ProjectConfigFile   *ConfigFile
+}
+
+// todo: this is a hack, remove letter
+func (w *Workspace) AddSelfWorkspace() {
+	ws := &Workspace{
+		GitRepository: GitRepository{
+			id:           -1,
+			Path:         "p",
+			Remotes:      w.GitRepository.Remotes,
+			FolderExists: false,
+			Name:         "n",
+		},
+	}
+	w.AddWorkspace(ws)
+}
+
+func (w *Workspace) FlattenProjects() []*Project {
+	var projects []*Project
+	for _, project := range w.Projects {
+		projects = append(projects, project)
+	}
+	for _, childWorkspace := range w.Children {
+		projects = append(projects, childWorkspace.FlattenProjects()...)
+	}
+	return projects
+}
+
+func (w *Workspace) FlattenWorkspaces() []*Workspace {
+	var workspaces []*Workspace
+	for _, childWorkspace := range w.Children {
+		workspaces = append(workspaces, childWorkspace)
+		workspaces = append(workspaces, childWorkspace.FlattenWorkspaces()...)
+	}
+	return workspaces
 }
 
 func (w *Workspace) AddWorkspace(childWorkspace *Workspace) {
@@ -118,18 +175,18 @@ func (w *Workspace) SaveProjects() error {
 	return nil
 }
 
-func (br *BaseRepository) formatBaseRepository() string {
+func (gr *GitRepository) formatBaseRepository() string {
 	var remoteParts []string
-	for _, remote := range br.Remotes {
+	for _, remote := range gr.Remotes {
 		if remote.Name == "origin" {
 			remoteParts = append(remoteParts, remote.URL)
 		} else {
 			remoteParts = append(remoteParts, fmt.Sprintf("%s %s", remote.URL, remote.Name))
 		}
 	}
-	return fmt.Sprintf("%s | %s", br.Path, strings.Join(remoteParts, " | "))
+	return fmt.Sprintf("%s | %s", gr.Path, strings.Join(remoteParts, " | "))
 }
 
-func (br *BaseRepository) isGitRepository() bool {
-	return len(br.Remotes) > 0
+func (gr *GitRepository) isGitRepository() bool {
+	return len(gr.Remotes) > 0
 }

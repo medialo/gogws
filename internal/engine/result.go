@@ -1,12 +1,14 @@
 package engine
 
 import (
+	"fmt"
 	"sort"
+	"sync/atomic"
 	"time"
 )
 
-type Result struct {
-	Label      string
+type JobResult struct {
+	JobId      string
 	Success    bool
 	Error      error
 	Duration   time.Duration
@@ -15,33 +17,50 @@ type Result struct {
 	order      int
 }
 
-func (r *Result) IsSuccess() bool {
+func (r *JobResult) IsSuccess() bool {
 	return r.Success && !r.Skipped
 }
 
-func (r *Result) IsFailure() bool {
+func (r *JobResult) IsFailure() bool {
 	return !r.Success && !r.Skipped
 }
 
-func (r *Result) IsSkipped() bool {
+func (r *JobResult) IsSkipped() bool {
 	return r.Skipped
 }
 
 type ExecuteResult struct {
-	Results       []Result
-	TotalDuration time.Duration
-	Stopped       bool
-	StopReason    string
+	Results        []JobResult
+	aTotalDuration atomic.Int64
+	Stopped        bool
+	StopReason     string
 }
 
-func NewExecuteResult() *ExecuteResult {
+func NewNoExecutionResult() *ExecuteResult {
 	return &ExecuteResult{
-		Results: make([]Result, 0),
+		Results:        make([]JobResult, 0),
+		Stopped:        true,
+		aTotalDuration: atomic.Int64{},
+		StopReason:     "No jobs to execute",
 	}
 }
 
-func (r *ExecuteResult) AddResult(result Result) {
+func NewExecuteResult(nb int) *ExecuteResult {
+	return &ExecuteResult{
+		Results:        make([]JobResult, 0, nb),
+		aTotalDuration: atomic.Int64{},
+		Stopped:        false,
+		StopReason:     "",
+	}
+}
+
+func (r *ExecuteResult) AddResult(result JobResult) {
 	r.Results = append(r.Results, result)
+	r.aTotalDuration.Add(int64(result.Duration))
+}
+
+func (r *ExecuteResult) TotalDuration() time.Duration {
+	return time.Duration(r.aTotalDuration.Load())
 }
 
 func (r *ExecuteResult) SortByOrder() {
@@ -50,8 +69,8 @@ func (r *ExecuteResult) SortByOrder() {
 	})
 }
 
-func (r *ExecuteResult) Succeeded() []Result {
-	var results []Result
+func (r *ExecuteResult) Succeeded() []JobResult {
+	var results []JobResult
 	for _, res := range r.Results {
 		if res.IsSuccess() {
 			results = append(results, res)
@@ -60,8 +79,8 @@ func (r *ExecuteResult) Succeeded() []Result {
 	return results
 }
 
-func (r *ExecuteResult) Failed() []Result {
-	var results []Result
+func (r *ExecuteResult) Failed() []JobResult {
+	var results []JobResult
 	for _, res := range r.Results {
 		if res.IsFailure() {
 			results = append(results, res)
@@ -70,8 +89,8 @@ func (r *ExecuteResult) Failed() []Result {
 	return results
 }
 
-func (r *ExecuteResult) Skipped() []Result {
-	var results []Result
+func (r *ExecuteResult) Skipped() []JobResult {
+	var results []JobResult
 	for _, res := range r.Results {
 		if res.IsSkipped() {
 			results = append(results, res)
@@ -105,25 +124,43 @@ func (r *ExecuteResult) AllSucceeded() bool {
 }
 
 func (r *ExecuteResult) SuccessLabels() []string {
-	var labels []string
+	labels := make([]string, 0, len(r.Succeeded()))
 	for _, res := range r.Succeeded() {
-		labels = append(labels, res.Label)
+		if label, err := labelString(res.JobId); err == nil {
+			labels = append(labels, label)
+		}
 	}
 	return labels
 }
 
 func (r *ExecuteResult) FailedLabels() []string {
-	var labels []string
+	labels := make([]string, 0, len(r.Failed()))
 	for _, res := range r.Failed() {
-		labels = append(labels, res.Label)
+		if label, err := labelString(res.JobId); err == nil {
+			labels = append(labels, label)
+		}
 	}
 	return labels
 }
 
 func (r *ExecuteResult) SkippedLabels() []string {
-	var labels []string
+	labels := make([]string, 0, len(r.Skipped()))
 	for _, res := range r.Skipped() {
-		labels = append(labels, res.Label)
+		if label, err := labelString(res.JobId); err == nil {
+			labels = append(labels, label)
+		}
 	}
 	return labels
+}
+
+// todo a delete
+func labelString(label any) (string, error) {
+	switch v := label.(type) {
+	case string:
+		return v, nil
+	case fmt.Stringer:
+		return v.String(), nil
+	default:
+		return "", fmt.Errorf("unsupported label type %T", label)
+	}
 }

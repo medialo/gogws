@@ -3,79 +3,59 @@ package git
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
+	"os"
 	"os/exec"
-	"regexp"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
 
-func GetStatus(repoPath string) RepositoryStatus {
-	return getStatusExec(repoPath)
-}
-
-func GetStatusDetailed(repoPath string) RepositoryStatus {
-	return getStatusExecDetailed(repoPath)
-}
-
-func getStatusExec(repoPath string) RepositoryStatus {
-	status := RepositoryStatus{
+func GetStatus(repoPath string) *RepositoryStatus {
+	slog.Debug("Getting status for repository", "path", repoPath, "context", "GIT_OP")
+	status := &RepositoryStatus{
 		Path:   repoPath,
 		Exists: false,
 	}
 
-	cmd := exec.Command("git", "rev-parse", "--git-dir")
-	cmd.Dir = repoPath
-	if err := cmd.Run(); err != nil {
+	if _, err := os.Stat(filepath.Join(repoPath, ".git")); os.IsNotExist(err) {
+		status.Error = err
 		return status
 	}
 	status.Exists = true
 
-	cmd = exec.Command("git", "remote")
+	cmd := exec.Command("git", "status", "--porcelain=v2", "--branch")
 	cmd.Dir = repoPath
-	if output, err := cmd.Output(); err == nil {
-		status.HasRemote = len(strings.TrimSpace(string(output))) > 0
-	}
-
-	cmd = exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Dir = repoPath
-	if output, err := cmd.Output(); err == nil {
-		status.Branch = strings.TrimSpace(string(output))
-	} else {
+	output, err := cmd.Output()
+	if err != nil {
 		status.Error = err
 		return status
 	}
 
-	cmd = exec.Command("git", "status", "--porcelain")
-	cmd.Dir = repoPath
-	if output, err := cmd.Output(); err == nil {
-		lines := strings.Split(string(output), "\n")
-		uncommitted := 0
-		untracked := 0
-		for _, line := range lines {
-			if len(line) < 2 {
-				continue
-			}
-			if strings.HasPrefix(line, "??") {
-				untracked++
-			} else {
-				uncommitted++
-			}
+	uncommitted, untracked := 0, 0
+	for _, line := range strings.Split(string(output), "\n") {
+		switch {
+		case strings.HasPrefix(line, "# branch.oid "):
+			status.Oid = strings.TrimPrefix(line, "# branch.oid ")
+		case strings.HasPrefix(line, "# branch.head "):
+			status.Branch = strings.TrimPrefix(line, "# branch.head ")
+		case strings.HasPrefix(line, "# branch.upstream"):
+			status.HasRemote = true
+		case strings.HasPrefix(line, "# branch.ab "):
+			fmt.Sscanf(line, "# branch.ab +%d -%d", &status.Ahead, &status.Behind)
+		case strings.HasPrefix(line, "?"):
+			untracked++
+		case len(line) > 0 && line[0] != '#':
+			uncommitted++
 		}
-		status.Uncommitted = uncommitted
-		status.Untracked = untracked
-		status.Clean = uncommitted == 0 && untracked == 0
 	}
+	status.Uncommitted = uncommitted
+	status.Untracked = untracked
+	status.Clean = uncommitted == 0 && untracked == 0
 
 	branches, err := getBranches(repoPath)
 	if err == nil {
 		status.Branches = branches
-		for _, b := range branches {
-			if b.IsCurrent {
-				status.Ahead = b.Ahead
-				status.Behind = b.Behind
-				break
-			}
-		}
 	}
 
 	return status
@@ -143,59 +123,4 @@ func getAheadBehind(repoPath, branch, upstream string) (ahead, behind int) {
 	}
 
 	return ahead, behind
-}
-
-func getStatusExecDetailed(repoPath string) RepositoryStatus {
-	status := RepositoryStatus{
-		Path:   repoPath,
-		Exists: false,
-	}
-
-	cmd := exec.Command("git", "status", "--porcelain=v2", "--branch")
-	cmd.Dir = repoPath
-	output, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			if exitErr.ExitCode() == 128 {
-				return status
-			}
-		}
-		status.Error = err
-		return status
-	}
-
-	status.Exists = true
-	status.Clean = true
-
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-	aheadBehindRegex := regexp.MustCompile(`\+(\d+) -(\d+)`)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if strings.HasPrefix(line, "# branch.head ") {
-			status.Branch = strings.TrimPrefix(line, "# branch.head ")
-		} else if strings.HasPrefix(line, "# branch.upstream ") {
-			status.HasRemote = true
-		} else if strings.HasPrefix(line, "# branch.ab ") {
-			matches := aheadBehindRegex.FindStringSubmatch(line)
-			if len(matches) == 3 {
-				status.Ahead, _ = strconv.Atoi(matches[1])
-				status.Behind, _ = strconv.Atoi(matches[2])
-			}
-		} else if strings.HasPrefix(line, "? ") {
-			status.Untracked++
-			status.Clean = false
-		} else if strings.HasPrefix(line, "1 ") || strings.HasPrefix(line, "2 ") {
-			status.Uncommitted++
-			status.Clean = false
-		}
-	}
-
-	branches, err := getBranches(repoPath)
-	if err == nil {
-		status.Branches = branches
-	}
-
-	return status
 }

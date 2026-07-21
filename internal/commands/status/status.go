@@ -4,17 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gogws/internal/export"
 	"gogws/internal/gws2"
+	"gogws/internal/view"
 	"log/slog"
-	"path/filepath"
+	"slices"
+	"sort"
 	"sync"
 
 	"gogws/internal/config"
 	"gogws/internal/engine"
-	"gogws/internal/export"
 	"gogws/internal/git"
 	"gogws/internal/ui/cli"
 
+	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 )
 
@@ -48,27 +51,21 @@ func runStatus(getConfig func() *config.Config) error {
 		return fmt.Errorf("no projects or workspaces found")
 	}
 
-	slog.Debug("Found projects and workspaces", "projects", len(ws2.Projects), "workspaces", len(ws2.Children))
-
-	statuses := getStatuses(cfg.WorkspaceRoot, ws2.Projects, cfg.Parallel)
-
-	/*
-		ws, err := gws.New(cfg.WorkspaceRoot).Load()
-		if err != nil {
-			return fmt.Errorf("failed to resolve workspace: %w", err)
-		}
-
-		if len(ws.Projects) == 0 && len(ws.Children) == 0 {
-			return fmt.Errorf("no projects or workspaces found")
-		}
-
-		slog.Debug("Found projects and workspaces", "projects", len(ws.Projects), "workspaces", len(ws.Children))
-
-		statuses := getStatuses(cfg.WorkspaceRoot, ws.Projects, cfg.Parallel)
-	*/
+	rootWorkspaceStatus := getStatusesView(cfg.Parallel, ws2)
+	if len(rootWorkspaceStatus) > 1 {
+		return fmt.Errorf("multiple workspaces found in the root workspace")
+	}
+	projectRepoStatus := getStatusesView(cfg.Parallel, ws2.Projects...)
+	sort.Slice(projectRepoStatus, func(i, j int) bool {
+		return projectRepoStatus[i].GwsRepository.Id() < projectRepoStatus[j].GwsRepository.Id()
+	})
+	workspaceRepoStatus := getStatusesView(cfg.Parallel, ws2.Children...)
+	sort.Slice(workspaceRepoStatus, func(i, j int) bool {
+		return workspaceRepoStatus[i].GwsRepository.Id() < workspaceRepoStatus[j].GwsRepository.Id()
+	})
 
 	if cfg.Format == "json" || cfg.Format == "yaml" {
-		output, err := export.Format(statuses, cfg.Format)
+		output, err := export.Format(cfg.Format, slices.Concat(rootWorkspaceStatus, workspaceRepoStatus, projectRepoStatus)...)
 		if err != nil {
 			return fmt.Errorf("failed to export status: %w", err)
 		}
@@ -77,31 +74,37 @@ func runStatus(getConfig func() *config.Config) error {
 	}
 
 	renderer := cli.NewRenderer()
-	output := renderer.RenderStatus(statuses, ws2, ws2.Children, cfg.OnlyChanges)
+	output := renderer.RenderStatus(rootWorkspaceStatus, projectRepoStatus, workspaceRepoStatus, ws2.Name, cfg.OnlyChanges)
 	fmt.Println(output)
 
 	return nil
 }
 
-func getStatuses(workspaceRoot string, projects []*gws2.Project, parallel int) []git.RepositoryStatus {
-	if len(projects) == 0 {
+func getStatusesView[T gws2.Repository](parallel int, repositories ...T) []*view.GitRepositoryStatusView {
+	if len(repositories) == 0 {
 		return nil
 	}
 
 	var mu sync.Mutex
-	statusMap := make(map[string]git.RepositoryStatus)
+	statusViewMap := make(map[string]*view.GitRepositoryStatusView, len(repositories))
 
-	jobs := make([]engine.Job, 0, len(projects))
+	jobs := make([]engine.Job, 0, len(repositories))
 
-	for _, p := range projects {
-		repoPath := filepath.Join(workspaceRoot, p.Path)
-		projectPath := p.Path
+	for _, repo := range repositories {
+		repoPath := repo.GetPath()
 
 		jobs = append(jobs, engine.Job{
-			Label: projectPath,
+			JobNameId: repo.GetPath(),
 			Fn: func(ctx context.Context, notify engine.Notify) error {
 				status := git.GetStatus(repoPath)
-				status.Path = projectPath
+				status.Path = repo.GetPath()
+
+				mu.Lock()
+				statusViewMap[repo.GetPath()] = &view.GitRepositoryStatusView{
+					GwsRepository: repo,
+					GitStatus:     nil,
+				}
+				mu.Unlock()
 
 				data, err := json.Marshal(status)
 				if err != nil {
@@ -109,10 +112,10 @@ func getStatuses(workspaceRoot string, projects []*gws2.Project, parallel int) [
 				}
 
 				mu.Lock()
-				statusMap[projectPath] = status
+				statusViewMap[repo.GetPath()].GitStatus = status
 				mu.Unlock()
 
-				notify(engine.EventLog, string(data))
+				notify(engine.EventJobLog, string(data))
 				return nil
 			},
 		})
@@ -127,18 +130,16 @@ func getStatuses(workspaceRoot string, projects []*gws2.Project, parallel int) [
 
 	result := <-resultCh
 
-	statuses := make([]git.RepositoryStatus, 0, len(projects))
 	for _, r := range result.Results {
-		if status, ok := statusMap[r.Label]; ok {
-			statuses = append(statuses, status)
-		} else {
-			statuses = append(statuses, git.RepositoryStatus{
-				Path:   r.Label,
+		status, ok := statusViewMap[r.JobId]
+		if ok && status.GitStatus == nil {
+			status.GitStatus = &git.RepositoryStatus{
 				Exists: false,
 				Error:  r.Error,
-			})
+				Path:   r.JobId,
+			}
 		}
 	}
 
-	return statuses
+	return lo.Values(statusViewMap)
 }

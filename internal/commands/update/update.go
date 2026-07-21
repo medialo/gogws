@@ -3,9 +3,6 @@ package update
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"os"
-
 	"gogws/internal/config"
 	"gogws/internal/engine"
 	"gogws/internal/git"
@@ -13,14 +10,15 @@ import (
 	"gogws/internal/hooks"
 	"gogws/internal/ui/cli"
 	engineui "gogws/internal/ui/engineui"
+	"log/slog"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 var (
 	skipProjects   bool
 	skipWorkspaces bool
+	recursive      bool
 )
 
 func NewCommand(getConfig func() *config.Config) *cobra.Command {
@@ -39,6 +37,7 @@ Use --skip-workspaces to only clone projects.`,
 
 	cmd.Flags().BoolVar(&skipProjects, "skip-projects", false, "skip cloning projects, only clone workspaces")
 	cmd.Flags().BoolVar(&skipWorkspaces, "skip-workspaces", false, "skip cloning workspaces, only clone projects")
+	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "Set update to recursive mode (clone all workspaces and sub-projects)")
 
 	return cmd
 }
@@ -60,12 +59,11 @@ func runUpdate(getConfig func() *config.Config) error {
 	}
 
 	renderer := cli.NewRenderer()
-	isInteractive := term.IsTerminal(int(os.Stdout.Fd()))
 	var clonedProjects []string
 
 	if !skipWorkspaces && len(ws.Children) > 0 {
-		result := cloneWorkspaces(cfg.WorkspaceRoot, ws, cfg.Parallel, cfg.StopOnError, isInteractive)
-		if !isInteractive {
+		result := cloneWorkspaces(cfg.WorkspaceRoot, ws, cfg.Parallel, cfg.StopOnError, cfg.IsInteractive)
+		if !cfg.IsInteractive {
 			renderSummary(renderer, result, "Cloned workspaces")
 		}
 	}
@@ -77,8 +75,8 @@ func runUpdate(getConfig func() *config.Config) error {
 		} else {
 			fmt.Println(renderer.RenderInfo(fmt.Sprintf("Cloning %d missing projects...", len(missingProjects))))
 
-			result := cloneProjects(cfg.WorkspaceRoot, missingProjects, cfg.Parallel, cfg.StopOnError, isInteractive)
-			if !isInteractive {
+			result := cloneProjects(cfg.WorkspaceRoot, missingProjects, cfg.Parallel, cfg.StopOnError, cfg.IsInteractive)
+			if !cfg.IsInteractive {
 				renderSummary(renderer, result, "Cloned projects")
 			}
 
@@ -95,10 +93,11 @@ func runUpdate(getConfig func() *config.Config) error {
 	return nil
 }
 
+// todo check if engine bien placé
 func cloneWorkspaces(workspaceRoot string, ws *gws.Workspace, parallel int, stopOnError bool, isInteractive bool) *engine.ExecuteResult {
 	toClone := ws.MissingWorkspaces()
 	if len(toClone) == 0 {
-		return engine.NewExecuteResult()
+		return engine.NewNoExecutionResult()
 	}
 
 	jobs := make([]engine.Job, 0, len(toClone))
@@ -109,7 +108,7 @@ func cloneWorkspaces(workspaceRoot string, ws *gws.Workspace, parallel int, stop
 		childPath := child.Path
 
 		jobs = append(jobs, engine.Job{
-			Label: child.Path,
+			JobNameId: child.Path,
 			Fn: func(ctx context.Context, notify engine.Notify) error {
 				return git.CloneWorkspace(ctx, wsRoot, childPath, remotes, engine.WrapRunner(notify))
 			},
@@ -119,7 +118,7 @@ func cloneWorkspaces(workspaceRoot string, ws *gws.Workspace, parallel int, stop
 	return runJobs(jobs, parallel, stopOnError, isInteractive)
 }
 
-func cloneProjects(workspaceRoot string, toClone []gws.Project, parallel int, stopOnError bool, isInteractive bool) *engine.ExecuteResult {
+func cloneProjects(workspaceRoot string, toClone []gws.Project, maxParallel int, stopOnError bool, isInteractive bool) *engine.ExecuteResult {
 	jobs := make([]engine.Job, 0, len(toClone))
 
 	for _, p := range toClone {
@@ -127,19 +126,19 @@ func cloneProjects(workspaceRoot string, toClone []gws.Project, parallel int, st
 		projectPath := p.Path
 
 		jobs = append(jobs, engine.Job{
-			Label: p.Path,
+			JobNameId: p.Path,
 			Fn: func(ctx context.Context, notify engine.Notify) error {
 				return git.Clone(ctx, projectPath, remotes, engine.WrapRunner(notify))
 			},
 		})
 	}
 
-	return runJobs(jobs, parallel, stopOnError, isInteractive)
+	return runJobs(jobs, maxParallel, stopOnError, isInteractive)
 }
 
-func runJobs(jobs []engine.Job, parallel int, stopOnError bool, isInteractive bool) *engine.ExecuteResult {
+func runJobs(jobs []engine.Job, maxParallel int, stopOnError bool, isInteractive bool) *engine.ExecuteResult {
 	opts := engine.DefaultOptions().
-		WithParallel(parallel).
+		WithParallel(maxParallel).
 		WithStopOnError(stopOnError)
 
 	eng := engine.NewEngine(opts)
@@ -159,7 +158,7 @@ func runJobs(jobs []engine.Job, parallel int, stopOnError bool, isInteractive bo
 func renderSummary(renderer *cli.Renderer, result *engine.ExecuteResult, action string) {
 	if result.HasErrors() {
 		for _, r := range result.Failed() {
-			renderer.RenderError(fmt.Sprintf("%s: %v", r.Label, r.Error))
+			renderer.RenderError(fmt.Sprintf("%s: %v", r.JobId, r.Error))
 		}
 	}
 	renderer.RenderSuccess(fmt.Sprintf("%s %d repositories", action, result.SuccessCount()))

@@ -7,35 +7,6 @@ import (
 	"time"
 )
 
-type Options struct {
-	Parallel    int
-	StopOnError bool
-	Timeout     time.Duration
-}
-
-func DefaultOptions() Options {
-	return Options{
-		Parallel:    5,
-		StopOnError: false,
-		Timeout:     0,
-	}
-}
-
-func (opts Options) WithParallel(parallel int) Options {
-	opts.Parallel = parallel
-	return opts
-}
-
-func (opts Options) WithStopOnError(stopOnError bool) Options {
-	opts.StopOnError = stopOnError
-	return opts
-}
-
-func (opts Options) WithTimeout(timeout time.Duration) Options {
-	opts.Timeout = timeout
-	return opts
-}
-
 type Engine struct {
 	options Options
 }
@@ -51,6 +22,8 @@ type runningJob struct {
 	index int
 }
 
+// RunJobs runs the given jobs in parallel.
+// It returns a channel of events and a channel of execution results.
 func (engine *Engine) RunJobs(ctx context.Context, jobs []Job) (<-chan Event, <-chan *ExecuteResult) {
 	eventCh := make(chan Event, 100)
 	resultCh := make(chan *ExecuteResult, 1)
@@ -65,7 +38,7 @@ func (engine *Engine) runJobsInternal(ctx context.Context, jobs []Job, eventCh c
 	defer close(resultCh)
 
 	if len(jobs) == 0 {
-		resultCh <- NewExecuteResult()
+		resultCh <- NewNoExecutionResult()
 		return
 	}
 
@@ -73,11 +46,12 @@ func (engine *Engine) runJobsInternal(ctx context.Context, jobs []Job, eventCh c
 	slog.Debug("Running jobs", "nbJobs", len(jobs), "nbWorkers", nbWorkers)
 
 	jobsChan := make(chan runningJob, nbWorkers)
-	resultsChan := make(chan Result, len(jobs))
+	//resultsChan := make(chan JobResult, len(jobs))
 	wg := &sync.WaitGroup{}
 
 	var cancelCtx context.Context
 	var cancel context.CancelFunc
+
 	if engine.options.StopOnError {
 		cancelCtx, cancel = context.WithCancel(ctx)
 		defer cancel()
@@ -94,40 +68,52 @@ func (engine *Engine) runJobsInternal(ctx context.Context, jobs []Job, eventCh c
 
 	wg.Add(len(jobs))
 
+	execResult := NewExecuteResult(len(jobs))
+
+	// launch x go routine worker
 	for workerID := 0; workerID < nbWorkers; workerID++ {
 		go func(id int) {
-			for rj := range jobsChan {
+			for runJob := range jobsChan { // worker get job from jobsChan
 				select {
 				case <-cancelCtx.Done():
-					resultsChan <- Result{
-						Label:      rj.job.Label,
+					//resultsChan <- JobResult{
+					//	JobId:      runJob.job.JobNameId,
+					//	Success:    false,
+					//	Skipped:    true,
+					//	SkipReason: "cancelled",
+					//	order:      runJob.index,
+					//}
+					execResult.AddResult(JobResult{
+						JobId:      runJob.job.JobNameId,
 						Success:    false,
 						Skipped:    true,
 						SkipReason: "cancelled",
-						order:      rj.index,
-					}
+						order:      runJob.index,
+					})
 					wg.Done()
 					continue
+
 				default:
 				}
 
 				eventCh <- Event{
 					GoroutineID: id,
 					Type:        EventJobStart,
-					JobLabel:    rj.job.Label,
+					JobNameId:   runJob.job.JobNameId,
 				}
 
 				start := time.Now()
+
 				notify := func(eventType EventType, log string) {
 					eventCh <- Event{
 						GoroutineID: id,
 						Type:        eventType,
-						JobLabel:    rj.job.Label,
+						JobNameId:   runJob.job.JobNameId,
 						Log:         log,
 					}
 				}
 
-				err := rj.job.Fn(cancelCtx, notify)
+				err := runJob.job.Fn(cancelCtx, notify)
 				duration := time.Since(start)
 
 				success := err == nil
@@ -142,51 +128,48 @@ func (engine *Engine) runJobsInternal(ctx context.Context, jobs []Job, eventCh c
 				eventCh <- Event{
 					GoroutineID: id,
 					Type:        EventJobEnd,
-					JobLabel:    rj.job.Label,
+					JobNameId:   runJob.job.JobNameId,
 					Success:     success,
 					Err:         jobErr,
 				}
 
-				resultsChan <- Result{
-					Label:    rj.job.Label,
+				//resultsChan <- JobResult{
+				//	JobId:    runJob.job.JobNameId,
+				//	Success:  success,
+				//	Error:    jobErr,
+				//	Duration: duration,
+				//	order:    runJob.index,
+				//}
+				execResult.AddResult(JobResult{
+					JobId:    runJob.job.JobNameId,
 					Success:  success,
 					Error:    jobErr,
 					Duration: duration,
-					order:    rj.index,
-				}
+					order:    runJob.index,
+				})
 				wg.Done()
 			}
 		}(workerID)
 	}
 
-	go func() {
-		for i, job := range jobs {
-			select {
-			case <-cancelCtx.Done():
-				for j := i; j < len(jobs); j++ {
-					resultsChan <- Result{
-						Label:      jobs[j].Label,
-						Success:    false,
-						Skipped:    true,
-						SkipReason: "cancelled",
-						order:      j,
-					}
-					wg.Done()
-				}
-				return
-			case jobsChan <- runningJob{job: job, index: i}:
-			}
-		}
-		close(jobsChan)
-	}()
+	//go func() {
+	//	for i, job := range jobs {
+	//		jobsChan <- runningJob{job: job, index: i}
+	//	}
+	//	close(jobsChan)
+	//}()
+
+	for i, job := range jobs {
+		jobsChan <- runningJob{job: job, index: i}
+	}
+	close(jobsChan)
 
 	wg.Wait()
-	close(resultsChan)
+	//close(resultsChan)
 
-	execResult := NewExecuteResult()
-	for r := range resultsChan {
-		execResult.AddResult(r)
-	}
+	//for r := range resultsChan {
+	//	execResult.AddResult(r)
+	//}
 	execResult.SortByOrder()
 
 	if cancelCtx.Err() != nil {

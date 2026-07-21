@@ -3,9 +3,11 @@ package ff
 import (
 	"context"
 	"fmt"
+	"gogws/internal/gws2"
+	"gogws/internal/ui/engineui"
 	"log/slog"
 	"os"
-	"path/filepath"
+	"time"
 
 	"gogws/internal/config"
 	"gogws/internal/engine"
@@ -13,7 +15,6 @@ import (
 	"gogws/internal/gws"
 	"gogws/internal/hooks"
 	"gogws/internal/ui/cli"
-	engineui "gogws/internal/ui/engineui"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -42,58 +43,64 @@ func runFF(getConfig func() *config.Config) error {
 
 	slog.Debug("Running ff command", "workspace", cfg.WorkspaceRoot)
 
-	ws, err := gws.New(cfg.WorkspaceRoot).Recursive(false).Load()
+	ws, err := gws2.NewFromPath(cfg.WorkspaceRoot).Recursive(true).Load()
 	if err != nil {
 		return fmt.Errorf("failed to load projects: %w", err)
 	}
 
-	jobs := make([]engine.Job, 0, len(ws.Projects))
-	var skippedJobs []engine.Result
+	projectList := ws.FlattenProjects()
+	jobs := make([]engine.Job, 0, len(projectList))
+	var skippedJobs []engine.JobResult
 
-	slog.Debug("ff command: creating jobs", "workspace", cfg.WorkspaceRoot, "nbProjects", len(ws.Projects))
-	for i, p := range ws.Projects {
-		repoPath := filepath.Join(cfg.WorkspaceRoot, p.Path)
-		status := git.GetStatus(repoPath)
-
-		if !status.Exists {
-			skippedJobs = append(skippedJobs, engine.Result{
-				Label:      p.Path,
-				Success:    false,
-				Skipped:    true,
-				SkipReason: "not cloned yet",
-			})
-			continue
-		}
-
-		path := repoPath
+	slog.Debug("ff command: creating jobs...", "workspace", cfg.WorkspaceRoot, "nbProjects", len(jobs))
+	start := time.Now()
+	for _, p := range projectList {
 		jobs = append(jobs, engine.Job{
-			Label: p.Path,
+			JobNameId: p.Path,
 			Fn: func(ctx context.Context, notify engine.Notify) error {
-				slog.Debug("preparing job \"gows ff\"", "project", path, "index", i)
-				return engine.Wrap(git.Pull(path).AsCmd()).Run(ctx, notify)
+				notify(engine.EventJobLog, "Checking if project is cloned...")
+				status := git.GetStatus(p.Path)
+
+				if !status.Exists {
+					ctx.Done()
+					if status.Error != nil {
+						return status.Error
+					}
+					//skippedJobs = append(skippedJobs, engine.Result{
+					//	Label:      p.Path,
+					//	Success:    false,
+					//	Skipped:    true,
+					//	SkipReason: "not cloned yet",
+					//})
+					return nil
+				}
+				notify(engine.EventJobLog, "Fast-forwarding...")
+
+				//slog.Debug("preparing job \"gows ff\"", "project", repoPath, "index", i)
+				return engine.Wrap(git.Pull(p.Path).AsCmd()).Run(ctx, notify)
 			},
 		})
 	}
+	slog.Debug("ff command: jobs created", "workspace", cfg.WorkspaceRoot, "nbJobs", len(jobs), "duration", time.Since(start))
 
 	opts := engine.DefaultOptions().
 		WithParallel(cfg.Parallel).
 		WithStopOnError(cfg.StopOnError)
 
 	eng := engine.NewEngine(opts)
-	events, resultCh := eng.RunJobs(context.Background(), jobs)
+	eventsCh, resultCh := eng.RunJobs(context.Background(), jobs)
 
 	isInteractive := term.IsTerminal(int(os.Stdout.Fd()))
-	//isInteractive = false // todo remove
 
 	if isInteractive {
-		if err := engineui.Run(events, opts.Parallel, len(jobs)); err != nil {
+		if err := engineui.Run(eventsCh, opts.Parallel, len(jobs)); err != nil {
 			slog.Error("UI error", "error", err)
 		}
 	} else {
-		engine.ConsumeVerbose(events)
+		engine.ConsumeVerbose(eventsCh) // program stay in ConsumeVerbose while eventsCh is not closed
 	}
 
-	execResult := <-resultCh
+	execResult := <-resultCh // pk ? pas directement resultCH ?
 
 	for _, skipped := range skippedJobs {
 		execResult.AddResult(skipped)
@@ -103,7 +110,7 @@ func runFF(getConfig func() *config.Config) error {
 		renderer := cli.NewRenderer()
 		if execResult.HasErrors() {
 			for _, r := range execResult.Failed() {
-				renderer.RenderError(fmt.Sprintf("%s: %v", r.Label, r.Error))
+				renderer.RenderError(fmt.Sprintf("%s: %v", r.JobId, r.Error))
 			}
 		}
 		renderer.RenderSuccess(fmt.Sprintf("Pulled %d repositories", execResult.SuccessCount()))

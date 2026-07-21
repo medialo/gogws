@@ -9,7 +9,7 @@ const (
 	WorkspacesFileName = ".workspaces." + FileExtension
 	IgnoreFileName     = ".ignore." + FileExtension
 	DefaultParallel    = 5
-	DefaultMaxDepth    = 100
+	DefaultMaxDepth    = 3
 )
 
 type Remote struct {

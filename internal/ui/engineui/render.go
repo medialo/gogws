@@ -2,11 +2,10 @@ package engineui
 
 import (
 	"fmt"
-	"strings"
-	"time"
-
 	"gogws/internal/engine"
 	"gogws/internal/ui/styles"
+	"log/slog"
+	"strings"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
@@ -20,20 +19,18 @@ const (
 )
 
 type WorkerState struct {
-	Status   WorkerStatus
-	JobLabel string
-	LastLog  string
-	Spinner  spinner.Model
+	Status  WorkerStatus
+	JobId   string
+	LastLog string
+	Spinner spinner.Model
 }
 
 type CompletedJob struct {
-	Label   string
+	Label   any
 	Success bool
 	Error   error
 	LastLog string
 }
-
-type eventMsg engine.Event
 
 type doneMsg struct{}
 
@@ -47,9 +44,9 @@ type Model struct {
 	quitting  bool
 }
 
-func NewModel(events <-chan engine.Event, parallelism int, totalJobs int) Model {
+func NewModel(events <-chan engine.Event, maxParallel int, totalJobs int) Model {
 	s := styles.Get()
-	workers := make([]WorkerState, parallelism)
+	workers := make([]WorkerState, maxParallel)
 	for i := range workers {
 		sp := spinner.New()
 		sp.Spinner = spinner.Dot
@@ -83,7 +80,7 @@ func (m Model) waitForEvent() tea.Cmd {
 		if !ok {
 			return doneMsg{}
 		}
-		return eventMsg(event)
+		return event
 	}
 }
 
@@ -100,33 +97,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 
-	case eventMsg:
-		event := engine.Event(msg)
+	case engine.Event:
+		event := msg
 		workerID := event.GoroutineID
 
 		if workerID >= 0 && workerID < len(m.workers) {
 			switch event.Type {
 			case engine.EventJobStart:
 				m.workers[workerID].Status = WorkerRunning
-				m.workers[workerID].JobLabel = event.JobLabel
+				m.workers[workerID].JobId = event.JobNameId
 				m.workers[workerID].LastLog = "starting..."
 
-			case engine.EventLog:
+			case engine.EventJobLog:
 				m.workers[workerID].LastLog = event.Log
 
-			case engine.EventErr:
+			case engine.EventJobErr:
 				m.workers[workerID].LastLog = event.Log
 
 			case engine.EventJobEnd:
 				m.completed = append(m.completed, CompletedJob{
-					Label:   event.JobLabel,
+					Label:   event.JobNameId,
 					Success: event.Success,
 					Error:   event.Err,
 					LastLog: m.workers[workerID].LastLog,
 				})
 				m.done++
 				m.workers[workerID].Status = WorkerIdle
-				m.workers[workerID].JobLabel = ""
+				m.workers[workerID].JobId = ""
 				m.workers[workerID].LastLog = ""
 			}
 		}
@@ -149,11 +146,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() tea.View {
-	if m.quitting && m.done == m.total {
-		return tea.NewView(m.renderFinalSummary())
-	}
-
 	var b strings.Builder
+
+	if m.quitting && m.done == m.total {
+		b.WriteString(m.renderFinalSummary())
+		return tea.NewView(b.String())
+	}
 
 	if len(m.completed) > 0 {
 		b.WriteString(m.styles.Muted.Render("─── Completed ───"))
@@ -198,7 +196,7 @@ func (m Model) View() tea.View {
 			b.WriteString(fmt.Sprintf("  %s [%d] %s %s\n",
 				w.Spinner.View(),
 				i,
-				m.styles.Path.Render(w.JobLabel),
+				m.styles.Path.Render(w.JobId),
 				m.styles.Muted.Render(log),
 			))
 		} else {
@@ -269,26 +267,29 @@ func (m Model) renderFinalSummary() string {
 	return b.String()
 }
 
-func Run(events <-chan engine.Event, parallelism int, totalJobs int) error {
-	p := tea.NewProgram(NewModel(events, parallelism, totalJobs))
+func Run(eventsCh <-chan engine.Event, maxParallel int, totalJobs int) error {
+	slog.Debug("Starting UI", "maxParallel", maxParallel, "totalJobs", totalJobs)
+	model := NewModel(eventsCh, maxParallel, totalJobs)
+
+	p := tea.NewProgram(model)
 	_, err := p.Run()
 	return err
 }
 
-func RunWithTimeout(events <-chan engine.Event, parallelism int, totalJobs int, timeout time.Duration) error {
-	p := tea.NewProgram(NewModel(events, parallelism, totalJobs))
-
-	done := make(chan error, 1)
-	go func() {
-		_, err := p.Run()
-		done <- err
-	}()
-
-	select {
-	case err := <-done:
-		return err
-	case <-time.After(timeout):
-		p.Quit()
-		return fmt.Errorf("UI timeout after %s", timeout)
-	}
-}
+//func RunWithTimeout(events <-chan engine.Event, parallelism int, totalJobs int, timeout time.Duration) error {
+//	p := tea.NewProgram(NewModel(events, parallelism, totalJobs))
+//
+//	done := make(chan error, 1)
+//	go func() {
+//		_, err := p.Run()
+//		done <- err
+//	}()
+//
+//	select {
+//	case err := <-done:
+//		return err
+//	case <-time.After(timeout):
+//		p.Quit()
+//		return fmt.Errorf("UI timeout after %s", timeout)
+//	}
+//}

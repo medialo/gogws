@@ -102,7 +102,7 @@ func TestFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := Format(statuses, tt.format)
+			_, err := Format(tt.format, statuses)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Format() error = %v, wantErr %v", err, tt.wantErr)
 			}

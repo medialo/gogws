@@ -3,6 +3,7 @@ package export
 import (
 	"encoding/json"
 	"fmt"
+	"gogws/internal/view"
 
 	"gogws/internal/git"
 
@@ -40,7 +41,7 @@ type RepositoryStatusOutput struct {
 	Error       string               `json:"error,omitempty" yaml:"error,omitempty"`
 }
 
-func ToJSON(statuses []git.RepositoryStatus) (string, error) {
+func ToJSON(statuses []*view.GitRepositoryStatusView) (string, error) {
 	output := buildOutput(statuses)
 	data, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
@@ -49,7 +50,7 @@ func ToJSON(statuses []git.RepositoryStatus) (string, error) {
 	return string(data), nil
 }
 
-func ToYAML(statuses []git.RepositoryStatus) (string, error) {
+func ToYAML(statuses []*view.GitRepositoryStatusView) (string, error) {
 	output := buildOutput(statuses)
 	data, err := yaml.Marshal(output)
 	if err != nil {
@@ -58,13 +59,14 @@ func ToYAML(statuses []git.RepositoryStatus) (string, error) {
 	return string(data), nil
 }
 
-func buildOutput(statuses []git.RepositoryStatus) StatusOutput {
+func buildOutput(statusesView []*view.GitRepositoryStatusView) StatusOutput {
 	output := StatusOutput{
-		Total:        len(statuses),
-		Repositories: make([]RepositoryStatusOutput, len(statuses)),
+		Total:        len(statusesView),
+		Repositories: make([]RepositoryStatusOutput, len(statusesView)),
 	}
 
-	for i, status := range statuses {
+	for i, statusView := range statusesView {
+		status := statusView.GitStatus
 		repoOutput := RepositoryStatusOutput{
 			Path:        status.Path,
 			Exists:      status.Exists,
@@ -118,7 +120,7 @@ func hasAnyBranchChanges(branches []git.BranchStatus) bool {
 	return false
 }
 
-func Format(statuses []git.RepositoryStatus, format string) (string, error) {
+func Format(format string, statuses ...*view.GitRepositoryStatusView) (string, error) {
 	switch format {
 	case "json":
 		return ToJSON(statuses)

@@ -7,6 +7,7 @@ import (
 	"gogws/internal/log"
 	"log/slog"
 	"os"
+	"strconv"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -19,7 +20,7 @@ var (
 	format      string
 	noColor     bool
 	onlyChanges bool
-	verbose     bool
+	verbosity   int
 	trustHooks  string
 	stopOnError bool
 	workingDir  string
@@ -37,9 +38,13 @@ Compatible with gws project files (.projects.gws)`,
 }
 
 func persistentPreRun(cmd *cobra.Command, _ []string) error {
-	log.SetVerbose(verbose)
+	log.SetVerbose(verbosity)
 	slog.Debug("Running PersistentPreRunE", "command", "root")
 	hooks.SetTrustMode(hooks.ParseTrustMode(trustHooks))
+
+	if parallel < 0 {
+		return fmt.Errorf("parallel \"" + strconv.Itoa(parallel) + "\" is invalid. Must be greater than or equal to 0")
+	}
 
 	if cmd.Name() == "config" {
 		return nil
@@ -52,6 +57,8 @@ func persistentPreRun(cmd *cobra.Command, _ []string) error {
 	if config.IsInitialized() {
 		config.ApplyFlags(themeFile, parallel, format, noColor, onlyChanges, stopOnError, workingDir)
 	}
+
+	onStopProfiling = profilingInit()
 
 	return nil
 }
@@ -66,11 +73,14 @@ func NewCommand() *cobra.Command {
 	rootCmd.PersistentFlags().IntVar(&parallel, "parallel", 0, "number of parallel operations (default: 5)")
 	rootCmd.PersistentFlags().StringVar(&format, "format", "text", "output format (text, json, yaml)")
 	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "disable colored output")
-	rootCmd.PersistentFlags().BoolVar(&onlyChanges, "only-changes", false, "show only repositories with changes")
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
+	rootCmd.PersistentFlags().BoolVarP(&onlyChanges, "only-changes", "c", false, "show only repositories with changes")
+	rootCmd.PersistentFlags().CountVarP(&verbosity, "verbose", "v", "enable verbose output")
 	rootCmd.PersistentFlags().StringVar(&trustHooks, "trust-hooks", "ask", "trust mode for local hooks: ask, all, skip")
 	rootCmd.PersistentFlags().BoolVar(&stopOnError, "stop-on-error", false, "stop execution on first error")
-	rootCmd.PersistentFlags().StringVarP(&workingDir, "working-dir", "D", "", "set working directory for the command. Is not set the current directory is used")
+	rootCmd.PersistentFlags().StringVarP(&workingDir, "working-dir", "D", "", "set working directory for the command. If not set the current directory is used")
+
+	// profiling
+	applyProfilingFlags(rootCmd)
 
 	viper.BindPFlag("theme", rootCmd.PersistentFlags().Lookup("theme"))
 	viper.BindPFlag("parallel", rootCmd.PersistentFlags().Lookup("parallel"))

@@ -206,7 +206,7 @@ func parseWorkspacesFile(root string) ([]*Workspace, error) {
 			line = strings.TrimSpace(line[:idx])
 		}
 
-		ws, err := parseWorkspaceLine(line)
+		ws, err := parseWorkspaceLine(root, line)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing line %d in %s: %w", lineNum, WorkspacesFileName, err)
 		}
@@ -286,13 +286,13 @@ func parseProjectLine(line string) (Project, error) {
 	return project, nil
 }
 
-func parseWorkspaceLine(line string) (*Workspace, error) {
+func parseWorkspaceLine(root string, line string) (*Workspace, error) {
 	parts := strings.Split(line, "|")
 	if len(parts) < 2 {
 		return nil, fmt.Errorf("invalid format: expected 'path | url [name]'")
 	}
 
-	path := strings.TrimSpace(parts[0])
+	path := filepath.Join(root, strings.TrimSpace(parts[0]))
 	if path == "" {
 		return nil, fmt.Errorf("empty workspace path")
 	}

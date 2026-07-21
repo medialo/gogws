@@ -1,5 +1,7 @@
 package git
 
+import "path/filepath"
+
 type BranchStatus struct {
 	Name      string `json:"name"`
 	IsCurrent bool   `json:"is_current"`
@@ -20,4 +22,9 @@ type RepositoryStatus struct {
 	Untracked   int            `json:"untracked"`
 	HasRemote   bool           `json:"has_remote"`
 	Error       error          `json:"-"`
+	Oid         string         `json:"oid"`
+}
+
+func (r *RepositoryStatus) Name() string {
+	return filepath.Base(r.Path)
 }
