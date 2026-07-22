@@ -1,4 +1,4 @@
-module gogws
+module github.com/medialo/gogws
 
 go 1.25.8
 
