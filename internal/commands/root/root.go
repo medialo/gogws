@@ -2,12 +2,13 @@ package root
 
 import (
 	"fmt"
-	"gogws/internal/config"
-	"gogws/internal/hooks"
-	"gogws/internal/log"
 	"log/slog"
 	"os"
 	"strconv"
+
+	"github.com/medialo/gogws/internal/config"
+	"github.com/medialo/gogws/internal/hooks"
+	"github.com/medialo/gogws/internal/log"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

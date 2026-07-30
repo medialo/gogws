@@ -1,9 +1,10 @@
 package git
 
 import (
-	"gogws/internal/gws"
 	"os"
 	"path/filepath"
+
+	"github.com/medialo/gogws/internal/gws"
 )
 
 func ToGitRemotes(remotes []gws.Remote) []Remote {

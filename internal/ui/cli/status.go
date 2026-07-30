@@ -2,9 +2,10 @@ package cli
 
 import (
 	"fmt"
-	"gogws/internal/gws2"
-	"gogws/internal/view"
 	"strings"
+
+	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/view"
 
 	"charm.land/lipgloss/v2/tree"
 	"github.com/samber/lo"

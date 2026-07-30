@@ -2,10 +2,11 @@ package engineui
 
 import (
 	"fmt"
-	"gogws/internal/engine"
-	"gogws/internal/ui/styles"
 	"log/slog"
 	"strings"
+
+	"github.com/medialo/gogws/internal/engine"
+	"github.com/medialo/gogws/internal/ui/styles"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"

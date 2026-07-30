@@ -1,9 +1,10 @@
 package main
 
 import (
-	"gogws/internal/commands"
-	"gogws/internal/log"
 	"os"
+
+	"github.com/medialo/gogws/internal/commands"
+	"github.com/medialo/gogws/internal/log"
 )
 
 func main() {

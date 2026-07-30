@@ -1,8 +1,8 @@
 package view
 
 import (
-	"gogws/internal/git"
-	"gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/git"
+	"github.com/medialo/gogws/internal/gws2"
 )
 
 type GitRepositoryStatusView struct {

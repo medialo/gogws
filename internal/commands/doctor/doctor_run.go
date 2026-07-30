@@ -2,9 +2,10 @@ package doctor
 
 import (
 	"fmt"
-	"gogws/internal/config"
-	"gogws/internal/gws2"
-	"gogws/internal/ui/cli"
+
+	"github.com/medialo/gogws/internal/config"
+	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/ui/cli"
 
 	"github.com/spf13/cobra"
 )

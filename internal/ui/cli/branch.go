@@ -2,7 +2,8 @@ package cli
 
 import (
 	"fmt"
-	"gogws/internal/git"
+
+	"github.com/medialo/gogws/internal/git"
 
 	"charm.land/lipgloss/v2"
 	"github.com/samber/lo"

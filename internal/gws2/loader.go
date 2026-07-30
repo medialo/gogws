@@ -2,10 +2,11 @@ package gws2
 
 import (
 	"fmt"
-	"gogws/internal/git"
 	"log/slog"
 	"os"
 	"path/filepath"
+
+	"github.com/medialo/gogws/internal/git"
 )
 
 type Loader struct {

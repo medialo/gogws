@@ -3,9 +3,10 @@ package export
 import (
 	"encoding/json"
 	"fmt"
-	"gogws/internal/view"
 
-	"gogws/internal/git"
+	"github.com/medialo/gogws/internal/view"
+
+	"github.com/medialo/gogws/internal/git"
 
 	"gopkg.in/yaml.v3"
 )

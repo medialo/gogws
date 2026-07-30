@@ -3,14 +3,15 @@ package update
 import (
 	"context"
 	"fmt"
-	"gogws/internal/config"
-	"gogws/internal/engine"
-	"gogws/internal/git"
-	"gogws/internal/gws"
-	"gogws/internal/hooks"
-	"gogws/internal/ui/cli"
-	engineui "gogws/internal/ui/engineui"
 	"log/slog"
+
+	"github.com/medialo/gogws/internal/config"
+	"github.com/medialo/gogws/internal/engine"
+	"github.com/medialo/gogws/internal/git"
+	"github.com/medialo/gogws/internal/gws"
+	"github.com/medialo/gogws/internal/hooks"
+	"github.com/medialo/gogws/internal/ui/cli"
+	engineui "github.com/medialo/gogws/internal/ui/engineui"
 
 	"github.com/spf13/cobra"
 )

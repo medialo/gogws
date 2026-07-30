@@ -2,10 +2,11 @@ package doctor
 
 import (
 	"fmt"
-	"gogws/internal/gws2"
-	"gogws/internal/ui/cli"
 	"log/slog"
 	"strconv"
+
+	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/ui/cli"
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"

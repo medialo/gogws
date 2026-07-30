@@ -2,13 +2,14 @@ package initcmd
 
 import (
 	"fmt"
-	"gogws/internal/config"
-	"gogws/internal/gitignore"
-	"gogws/internal/gws"
-	"gogws/internal/ui/cli"
 	"log/slog"
 	"os"
 	"path/filepath"
+
+	"github.com/medialo/gogws/internal/config"
+	"github.com/medialo/gogws/internal/gitignore"
+	"github.com/medialo/gogws/internal/gws"
+	"github.com/medialo/gogws/internal/ui/cli"
 
 	"github.com/spf13/cobra"
 )

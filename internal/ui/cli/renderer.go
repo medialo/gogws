@@ -2,11 +2,12 @@ package cli
 
 import (
 	"fmt"
-	"gogws/internal/git"
-	"gogws/internal/gws"
-	"gogws/internal/gws2"
-	"gogws/internal/theme"
 	"strings"
+
+	"github.com/medialo/gogws/internal/git"
+	"github.com/medialo/gogws/internal/gws"
+	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/theme"
 
 	"charm.land/lipgloss/v2"
 )

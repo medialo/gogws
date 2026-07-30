@@ -2,9 +2,10 @@ package cli
 
 import (
 	"fmt"
-	"gogws/internal/git"
-	"gogws/internal/view"
 	"strings"
+
+	"github.com/medialo/gogws/internal/git"
+	"github.com/medialo/gogws/internal/view"
 )
 
 // renderRepository return the repository name rendered and a list of branches

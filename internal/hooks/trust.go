@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gogws/internal/config"
+	"github.com/medialo/gogws/internal/config"
 )
 
 type TrustMode string

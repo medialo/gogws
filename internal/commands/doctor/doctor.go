@@ -1,7 +1,7 @@
 package doctor
 
 import (
-	"gogws/internal/config"
+	"github.com/medialo/gogws/internal/config"
 
 	"github.com/spf13/cobra"
 )

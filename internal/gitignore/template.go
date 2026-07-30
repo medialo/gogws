@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"gogws/internal/config"
-	"gogws/internal/gws"
+	"github.com/medialo/gogws/internal/config"
+	"github.com/medialo/gogws/internal/gws"
 )
 
 type TemplateData struct {

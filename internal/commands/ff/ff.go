@@ -3,18 +3,19 @@ package ff
 import (
 	"context"
 	"fmt"
-	"gogws/internal/gws2"
-	"gogws/internal/ui/engineui"
 	"log/slog"
 	"os"
 	"time"
 
-	"gogws/internal/config"
-	"gogws/internal/engine"
-	"gogws/internal/git"
-	"gogws/internal/gws"
-	"gogws/internal/hooks"
-	"gogws/internal/ui/cli"
+	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/ui/engineui"
+
+	"github.com/medialo/gogws/internal/config"
+	"github.com/medialo/gogws/internal/engine"
+	"github.com/medialo/gogws/internal/git"
+	"github.com/medialo/gogws/internal/gws"
+	"github.com/medialo/gogws/internal/hooks"
+	"github.com/medialo/gogws/internal/ui/cli"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"

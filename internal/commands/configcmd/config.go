@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"gogws/internal/config"
-	"gogws/internal/ui/cli"
+	"github.com/medialo/gogws/internal/config"
+	"github.com/medialo/gogws/internal/ui/cli"
 
 	"github.com/spf13/cobra"
 )

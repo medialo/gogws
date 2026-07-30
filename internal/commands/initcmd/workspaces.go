@@ -2,13 +2,14 @@ package initcmd
 
 import (
 	"fmt"
-	"gogws/internal/config"
-	"gogws/internal/git"
-	"gogws/internal/gitignore"
-	"gogws/internal/gws"
-	"gogws/internal/ui/cli"
 	"log/slog"
 	"os"
+
+	"github.com/medialo/gogws/internal/config"
+	"github.com/medialo/gogws/internal/git"
+	"github.com/medialo/gogws/internal/gitignore"
+	"github.com/medialo/gogws/internal/gws"
+	"github.com/medialo/gogws/internal/ui/cli"
 
 	"charm.land/huh/v2"
 	"github.com/samber/lo"

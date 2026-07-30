@@ -3,8 +3,9 @@ package add
 import (
 	"context"
 	"fmt"
-	"gogws/internal/git"
-	"gogws/internal/gws"
+
+	"github.com/medialo/gogws/internal/git"
+	"github.com/medialo/gogws/internal/gws"
 
 	"charm.land/huh/v2"
 	"github.com/spf13/cobra"

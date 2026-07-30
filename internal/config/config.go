@@ -5,7 +5,7 @@ import (
 	"os"
 	"sync"
 
-	"gogws/internal/gws"
+	"github.com/medialo/gogws/internal/gws"
 
 	"golang.org/x/term"
 )

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gogws/internal/gitignore"
-	"gogws/internal/gws"
+	"github.com/medialo/gogws/internal/gitignore"
+	"github.com/medialo/gogws/internal/gws"
 
 	"github.com/spf13/cobra"
 )

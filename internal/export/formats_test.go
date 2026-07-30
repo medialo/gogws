@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"gogws/internal/git"
+	"github.com/medialo/gogws/internal/git"
 
 	"gopkg.in/yaml.v3"
 )

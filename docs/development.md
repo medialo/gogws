@@ -149,7 +149,7 @@ Each command is in its own package under `internal/commands/`:
 package mycommand
 
 import (
-    "gogws/internal/config"
+    "github.com/medialo/gogws/internal/config"
     "github.com/spf13/cobra"
 )
 
@@ -186,7 +186,7 @@ rootCmd.AddCommand(mycommand.NewCommand(root.GetConfig))
 The engine handles parallel/serial execution across repositories:
 
 ```go
-import "gogws/internal/engine"
+import "github.com/medialo/gogws/internal/engine"
 
 // Create commands
 commands := []engine.RepoCommand{
@@ -213,7 +213,7 @@ output.RenderSummary(result, "Fetched")
 ### Workspace Loading
 
 ```go
-import "gogws/internal/gws"
+import "github.com/medialo/gogws/internal/gws"
 
 // Load workspace
 ws, err := gws.New(workspaceRoot).Load()
@@ -235,7 +235,7 @@ missing := ws.MissingProjects()
 ### Hooks
 
 ```go
-import "gogws/internal/hooks"
+import "github.com/medialo/gogws/internal/hooks"
 
 // Run pre-command hook
 if err := hooks.PreFetch(workspaceRoot); err != nil {
@@ -292,11 +292,11 @@ go test -v ./...
    
    import (
        "fmt"
-       "gogws/internal/config"
-       "gogws/internal/engine"
-       "gogws/internal/gws"
-       "gogws/internal/hooks"
-       "gogws/internal/ui/cli"
+       "github.com/medialo/gogws/internal/config"
+       "github.com/medialo/gogws/internal/engine"
+       "github.com/medialo/gogws/internal/gws"
+       "github.com/medialo/gogws/internal/hooks"
+       "github.com/medialo/gogws/internal/ui/cli"
        "github.com/spf13/cobra"
    )
    
@@ -356,7 +356,7 @@ go test -v ./...
 3. **Register command:**
    ```go
    // internal/commands/commands.go
-   import "gogws/internal/commands/mycommand"
+   import "github.com/medialo/gogws/internal/commands/mycommand"
    
    // In RegisterCommands():
    rootCmd.AddCommand(mycommand.NewCommand(root.GetConfig))

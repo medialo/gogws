@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"gogws/internal/gitignore"
-	"gogws/internal/ui/cli"
+	"github.com/medialo/gogws/internal/gitignore"
+	"github.com/medialo/gogws/internal/ui/cli"
 
 	"github.com/spf13/cobra"
 )
