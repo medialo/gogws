@@ -75,7 +75,7 @@ func runClone(getConfig func() *config.Config, args []string) error {
 			continue
 		}
 
-		remotes := git.ToGitRemotes(project.Remotes)
+		remotes := git.ToGitRemotesDeprecated(project.Remotes)
 		wsRoot := cfg.WorkspaceRoot
 		projectPath := project.Path
 

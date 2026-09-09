@@ -69,7 +69,7 @@ func runAddProject(args []string) error {
 	}
 
 	if autoClone {
-		remotes := git.ToGitRemotes(projectToAdd.Remotes)
+		remotes := git.ToGitRemotesDeprecated(projectToAdd.Remotes)
 		err := git.CloneWorkspace(context.Background(), ws.Root, projectToAdd.Path, remotes, nil)
 
 		if err != nil {

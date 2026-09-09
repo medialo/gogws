@@ -7,11 +7,6 @@ import (
 	"path/filepath"
 )
 
-type Remote struct {
-	Name string
-	URL  string
-}
-
 func defaultRunner(ctx context.Context, cmd *exec.Cmd) error {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -20,7 +15,20 @@ func defaultRunner(ctx context.Context, cmd *exec.Cmd) error {
 	return nil
 }
 
-func Clone(ctx context.Context, targetPath string, remotes []Remote, run func(context.Context, *exec.Cmd) error) error {
+func Clone(ctx context.Context, remote *Remote, run func(context.Context, *exec.Cmd) error) error {
+	if run == nil {
+		run = defaultRunner
+	}
+
+	cmd := exec.CommandContext(ctx, "git", "clone", "--progress", remote.URL, remote.Name)
+	if err := run(ctx, cmd); err != nil {
+		return fmt.Errorf("failed to clone repository: %w", err)
+	}
+
+	return nil
+}
+
+func CloneOld(ctx context.Context, targetPath string, remotes []Remote, run func(context.Context, *exec.Cmd) error) error {
 	if len(remotes) == 0 {
 		return fmt.Errorf("no remotes defined")
 	}
