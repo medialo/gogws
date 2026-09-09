@@ -4,24 +4,22 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/medialo/gogws/internal/git"
 )
 
 type RepositoryType int
 
-//go:generate enumer -type=RepositoryType -trimprefix RepositoryType
+//go:generate go tool enumer -type=RepositoryType -trimprefix RepositoryType
 const (
 	RepositoryTypeProject RepositoryType = iota
 	RepositoryTypeWorkspace
+	RepositoryTypeFolder
 )
 
 type ConfigFile struct {
 	Path   string
 	Legacy bool
-}
-
-type Remote struct {
-	Name string
-	URL  string
 }
 
 type Repository interface {
@@ -56,7 +54,7 @@ type GitRepository struct {
 	id            int
 	Path          string // Path of the repository from the gws config file, can be ".", use GetPath() to get real path
 	Name          string // Name represents the name of the Git repository based on the last part of the path
-	Remotes       []*Remote
+	Remotes       []*git.Remote
 	FolderExists  bool
 	gitRepository bool
 	Type          RepositoryType
@@ -189,4 +187,41 @@ func (gr *GitRepository) formatBaseRepository() string {
 
 func (gr *GitRepository) isGitRepository() bool {
 	return len(gr.Remotes) > 0
+}
+
+func (gr *GitRepository) GetOriginRemote() *git.Remote {
+	if len(gr.Remotes) > 0 {
+		return gr.Remotes[0]
+	}
+	return nil
+}
+
+func (gr *GitRepository) GetUpstreamRemote() *git.Remote {
+	if len(gr.Remotes) > 1 {
+		return gr.Remotes[1]
+	}
+	return nil
+}
+
+func (w *Workspace) MissingWorkspaces() []*Workspace {
+	var missings = make([]*Workspace, len(w.Children))
+	for _, child := range w.Children {
+		_, err := os.Stat(child.Path)
+		if os.IsNotExist(err) {
+			fmt.Println("Folder does not exist")
+			missings = append(missings, child)
+		}
+	}
+	return missings
+}
+
+func (w *Workspace) MissingProjects() []*Project {
+	var missings = make([]*Project, len(w.Projects))
+	for _, project := range w.Projects {
+		_, err := os.Stat(project.Path)
+		if os.IsNotExist(err) {
+			missings = append(missings, project)
+		}
+	}
+	return missings
 }

@@ -28,3 +28,8 @@ type RepositoryStatus struct {
 func (r *RepositoryStatus) Name() string {
 	return filepath.Base(r.Path)
 }
+
+type Remote struct {
+	Name string
+	URL  string
+}

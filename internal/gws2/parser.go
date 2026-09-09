@@ -190,22 +190,32 @@ func parseWorkspaceLine(line string) (*Workspace, error) {
 		return nil, fmt.Errorf("empty workspace path")
 	}
 
+	var _type RepositoryType
 	remotePart := strings.TrimSpace(parts[1])
 	if remotePart == "" {
-		return nil, fmt.Errorf("empty remote URL for workspace %s", path)
+		return nil, fmt.Errorf("empty remote URL or type for workspace %s", path)
 	}
 
-	remote, err := parseRemote(remotePart, 0)
-	if err != nil {
-		return nil, err
+	var _remote *Remote
+
+	if "folder" == remotePart {
+		_type = RepositoryTypeFolder
+		_remote = nil
+	} else {
+		_type = RepositoryTypeWorkspace
+		var err error
+		_remote, err = parseRemote(remotePart, 0)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &Workspace{
 		GitRepository: GitRepository{
 			Path:          path,
-			Remotes:       []*Remote{remote},
+			Remotes:       []*Remote{_remote},
 			Name:          filepath.Base(path),
-			Type:          RepositoryTypeWorkspace,
+			Type:          _type,
 			FolderExists:  false,
 			gitRepository: true, // read from gws config file so is expected to be a git repository
 		},

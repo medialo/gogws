@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _RepositoryTypeName = "ProjectWorkspace"
+const _RepositoryTypeName = "ProjectWorkspaceFolder"
 
-var _RepositoryTypeIndex = [...]uint8{0, 7, 16}
+var _RepositoryTypeIndex = [...]uint8{0, 7, 16, 22}
 
-const _RepositoryTypeLowerName = "projectworkspace"
+const _RepositoryTypeLowerName = "projectworkspacefolder"
 
 func (i RepositoryType) String() string {
 	if i < 0 || i >= RepositoryType(len(_RepositoryTypeIndex)-1) {
@@ -26,20 +26,24 @@ func _RepositoryTypeNoOp() {
 	var x [1]struct{}
 	_ = x[RepositoryTypeProject-(0)]
 	_ = x[RepositoryTypeWorkspace-(1)]
+	_ = x[RepositoryTypeFolder-(2)]
 }
 
-var _RepositoryTypeValues = []RepositoryType{RepositoryTypeProject, RepositoryTypeWorkspace}
+var _RepositoryTypeValues = []RepositoryType{RepositoryTypeProject, RepositoryTypeWorkspace, RepositoryTypeFolder}
 
 var _RepositoryTypeNameToValueMap = map[string]RepositoryType{
-	_RepositoryTypeName[0:7]:       RepositoryTypeProject,
-	_RepositoryTypeLowerName[0:7]:  RepositoryTypeProject,
-	_RepositoryTypeName[7:16]:      RepositoryTypeWorkspace,
-	_RepositoryTypeLowerName[7:16]: RepositoryTypeWorkspace,
+	_RepositoryTypeName[0:7]:        RepositoryTypeProject,
+	_RepositoryTypeLowerName[0:7]:   RepositoryTypeProject,
+	_RepositoryTypeName[7:16]:       RepositoryTypeWorkspace,
+	_RepositoryTypeLowerName[7:16]:  RepositoryTypeWorkspace,
+	_RepositoryTypeName[16:22]:      RepositoryTypeFolder,
+	_RepositoryTypeLowerName[16:22]: RepositoryTypeFolder,
 }
 
 var _RepositoryTypeNames = []string{
 	_RepositoryTypeName[0:7],
 	_RepositoryTypeName[7:16],
+	_RepositoryTypeName[16:22],
 }
 
 // RepositoryTypeString retrieves an enum value from the enum constants string name.
