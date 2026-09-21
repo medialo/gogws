@@ -3,11 +3,10 @@ package check
 import (
 	"fmt"
 	"log/slog"
-	"path/filepath"
 
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/git"
-	"github.com/medialo/gogws/internal/gws"
+	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/hooks"
 	"github.com/medialo/gogws/internal/ui/cli"
 
@@ -38,7 +37,7 @@ func runCheck(getConfig func() *config.Config) error {
 
 	slog.Debug("Running check command", "workspace", cfg.WorkspaceRoot)
 
-	ws, err := gws.New(cfg.WorkspaceRoot).Recursive(false).Load()
+	ws, err := gws2.NewFromPath(cfg.WorkspaceRoot).Recursive(false).Load()
 	if err != nil {
 		return fmt.Errorf("failed to load projects: %w", err)
 	}
@@ -50,8 +49,7 @@ func runCheck(getConfig func() *config.Config) error {
 
 	missing := 0
 	for _, project := range ws.Projects {
-		repoPath := filepath.Join(cfg.WorkspaceRoot, project.Path)
-		status := git.GetStatus(repoPath)
+		status := git.GetStatus(project.Path)
 		if !status.Exists {
 			fmt.Println(renderer.RenderError(fmt.Sprintf("Missing: %s", project.Path)))
 			missing++

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"path/filepath"
 )
 
 func defaultRunner(ctx context.Context, cmd *exec.Cmd) error {
@@ -15,12 +14,16 @@ func defaultRunner(ctx context.Context, cmd *exec.Cmd) error {
 	return nil
 }
 
-func Clone(ctx context.Context, remote *Remote, run func(context.Context, *exec.Cmd) error) error {
+func Clone(ctx context.Context, remote *Remote, cloneFinalName string, run func(context.Context, *exec.Cmd) error) error {
 	if run == nil {
 		run = defaultRunner
 	}
 
-	cmd := exec.CommandContext(ctx, "git", "clone", "--progress", remote.URL, remote.Name)
+	if remote == nil {
+		return fmt.Errorf("remote cannot be nil")
+	}
+
+	cmd := exec.CommandContext(ctx, "git", "clone", "--progress", remote.URL, cloneFinalName)
 	if err := run(ctx, cmd); err != nil {
 		return fmt.Errorf("failed to clone repository: %w", err)
 	}
@@ -56,7 +59,6 @@ func CloneOld(ctx context.Context, targetPath string, remotes []Remote, run func
 	return nil
 }
 
-func CloneWorkspace(ctx context.Context, workspaceRoot string, path string, remotes []Remote, run func(context.Context, *exec.Cmd) error) error {
-	targetPath := filepath.Join(workspaceRoot, path)
-	return Clone(ctx, targetPath, remotes, run)
+func CloneWorkspace(ctx context.Context, remote *Remote, cloneFinalName string, run func(context.Context, *exec.Cmd) error) error {
+	return Clone(ctx, remote, cloneFinalName, run)
 }

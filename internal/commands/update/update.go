@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/engine"
@@ -63,9 +64,14 @@ func runUpdate(getConfig func() *config.Config) error {
 	var clonedProjects []string
 
 	if !skipWorkspaces && len(ws.Children) > 0 {
-		result := cloneWorkspaces(cfg.WorkspaceRoot, ws, cfg.Parallel, cfg.StopOnError, cfg.IsInteractive)
-		if !cfg.IsInteractive {
-			renderSummary(renderer, result, "Cloned workspaces")
+		missingWorkspaces := ws.MissingWorkspaces()
+		if len(missingWorkspaces) == 0 {
+			fmt.Println(renderer.RenderSuccess("All workspaces are already cloned"))
+		} else {
+			result := cloneWorkspaces(cfg.WorkspaceRoot, missingWorkspaces, cfg.Parallel, cfg.StopOnError, cfg.IsInteractive)
+			if !cfg.IsInteractive {
+				renderSummary(renderer, result, "Cloned workspaces")
+			}
 		}
 	}
 
@@ -95,8 +101,7 @@ func runUpdate(getConfig func() *config.Config) error {
 }
 
 // todo check if engine bien placé
-func cloneWorkspaces(workspaceRoot string, ws *gws2.Workspace, parallel int, stopOnError bool, isInteractive bool) *engine.ExecuteResult {
-	toClone := ws.MissingWorkspaces()
+func cloneWorkspaces(workspaceRoot string, toClone []*gws2.Workspace, parallel int, stopOnError bool, isInteractive bool) *engine.ExecutionResult {
 	if len(toClone) == 0 {
 		return engine.NewNoExecutionResult()
 	}
@@ -108,29 +113,35 @@ func cloneWorkspaces(workspaceRoot string, ws *gws2.Workspace, parallel int, sto
 		jobs = append(jobs, engine.Job{
 			JobNameId: child.Path,
 			Fn: func(ctx context.Context, notify engine.Notify) error {
-				if child.Type.IsARepositoryType() {
-
+				if gws2.RepositoryTypeFolder != child.Type {
+					return git.CloneWorkspace(ctx, child.GetOriginRemote(), child.Name, engine.WrapRunner(notify))
 				}
-				remotes := []git.Remote{{Name: child.GetOriginRemote().Name, URL: child.GetOriginRemote().URL}}
-				wsRoot := workspaceRoot
-				childPath := child.Path
-
-				return git.CloneWorkspace(ctx, wsRoot, childPath, remotes, engine.WrapRunner(notify))
+				err := os.MkdirAll(child.Path, 0755)
+				if err != nil {
+					return err
+				}
+				child.FolderExists = true
+				return nil
 			},
 		})
+
 	}
 
 	return runJobs(jobs, parallel, stopOnError, isInteractive)
 }
 
-func cloneProjects(workspaceRoot string, toClone []gws2.Project, maxParallel int, stopOnError bool, isInteractive bool) *engine.ExecuteResult {
+func cloneProjects(workspaceRoot string, toClone []*gws2.Project, maxParallel int, stopOnError bool, isInteractive bool) *engine.ExecutionResult {
+	if len(toClone) == 0 {
+		return engine.NewNoExecutionResult()
+	}
+
 	jobs := make([]engine.Job, 0, len(toClone))
 
 	for _, p := range toClone {
 		jobs = append(jobs, engine.Job{
 			JobNameId: p.Path,
 			Fn: func(ctx context.Context, notify engine.Notify) error {
-				return git.Clone(ctx, p.Path, p.GetOriginRemote(), engine.WrapRunner(notify))
+				return git.Clone(ctx, p.GetOriginRemote(), p.Name, engine.WrapRunner(notify))
 			},
 		})
 	}
@@ -138,7 +149,7 @@ func cloneProjects(workspaceRoot string, toClone []gws2.Project, maxParallel int
 	return runJobs(jobs, maxParallel, stopOnError, isInteractive)
 }
 
-func runJobs(jobs []engine.Job, maxParallel int, stopOnError bool, isInteractive bool) *engine.ExecuteResult {
+func runJobs(jobs []engine.Job, maxParallel int, stopOnError bool, isInteractive bool) *engine.ExecutionResult {
 	opts := engine.DefaultOptions().
 		WithParallel(maxParallel).
 		WithStopOnError(stopOnError)
@@ -157,7 +168,7 @@ func runJobs(jobs []engine.Job, maxParallel int, stopOnError bool, isInteractive
 	return <-resultCh
 }
 
-func renderSummary(renderer *cli.Renderer, result *engine.ExecuteResult, action string) {
+func renderSummary(renderer *cli.Renderer, result *engine.ExecutionResult, action string) {
 	if result.HasErrors() {
 		for _, r := range result.Failed() {
 			renderer.RenderError(fmt.Sprintf("%s: %v", r.JobId, r.Error))

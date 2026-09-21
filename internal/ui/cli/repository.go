@@ -5,17 +5,24 @@ import (
 	"strings"
 
 	"github.com/medialo/gogws/internal/git"
+	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/view"
 )
 
 // renderRepository return the repository name rendered and a list of branches
 func (r *Renderer) renderRepository(repositoryStatusView *view.GitRepositoryStatusView, summary *Summary, onlyChanges bool) (string, []string) {
 	status := repositoryStatusView.GitStatus
-	if !status.Exists {
-		if !repositoryStatusView.GwsRepository.IsGitRepository() {
+
+	if repositoryStatusView.GwsRepository.GetType() == gws2.RepositoryTypeFolder {
+		if repositoryStatusView.GwsRepository.FolderExist() {
 			summary.Clean++
 			return r.renderFolderRepo(status), []string{}
 		}
+		summary.Missing++
+		return r.renderMissingFolderRepo(status), []string{}
+	}
+
+	if !status.Exists {
 		summary.Missing++
 		if !onlyChanges {
 			return r.renderMissingRepo(status), []string{}
@@ -69,7 +76,12 @@ func (r *Renderer) renderEmptyRepo(status *git.RepositoryStatus) string {
 
 func (r *Renderer) renderFolderRepo(status *git.RepositoryStatus) string {
 	icon := r.theme.Emoji.Folder
-	return fmt.Sprintf("%s %s (%s)", icon, r.theme.Path.Render(status.Name()), r.theme.Warning.Render("folder"))
+	return fmt.Sprintf("%s %s %s", icon, r.theme.Path.Render(status.Name()), r.theme.Warning.Render("[folder]"))
+}
+
+func (r *Renderer) renderMissingFolderRepo(status *git.RepositoryStatus) string {
+	icon := r.theme.Emoji.Folder
+	return fmt.Sprintf("%s %s %s", icon, r.theme.Path.Render(status.Name()), r.theme.Subtitle.Render("[not created]"))
 }
 
 func (r *Renderer) renderRepo(status *git.RepositoryStatus) (string, []string) {
