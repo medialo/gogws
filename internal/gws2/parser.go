@@ -7,10 +7,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/medialo/gogws/internal/git"
 )
 
-func parseProjectsFile(root string) ([]*Project, error) {
-	_, location := getProjectsConfigFileLocation(root)
+func parseProjectsFile(rootPath string) ([]*Project, error) {
+	_, location := getProjectsConfigFileLocation(rootPath)
 	if location == nil {
 		return nil, fmt.Errorf("no projects file found")
 	}
@@ -39,7 +41,7 @@ func parseProjectsFile(root string) ([]*Project, error) {
 			line = strings.TrimSpace(line[:idx])
 		}
 
-		project, err := parseProjectLine(root, line)
+		project, err := parseProjectLine(rootPath, line)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing line %d: %w", lineNum, err)
 		}
@@ -52,7 +54,7 @@ func parseProjectsFile(root string) ([]*Project, error) {
 		return nil, fmt.Errorf("error reading projects file: %w", err)
 	}
 
-	ignorePatterns, err := parseIgnoreFile(root)
+	ignorePatterns, err := parseIgnoreFile(rootPath)
 	if err == nil && len(ignorePatterns) > 0 {
 		projects = filterIgnoredProjects(projects, ignorePatterns)
 	}
@@ -60,8 +62,8 @@ func parseProjectsFile(root string) ([]*Project, error) {
 	return projects, nil
 }
 
-func parseWorkspacesFile(root string) ([]*Workspace, error) {
-	_, location := getWorkspacesConfigFileLocation(root)
+func parseWorkspacesFile(rootPath string) ([]*Workspace, error) {
+	_, location := getWorkspacesConfigFileLocation(rootPath)
 	if location == nil {
 		return []*Workspace{}, nil
 	}
@@ -93,7 +95,7 @@ func parseWorkspacesFile(root string) ([]*Workspace, error) {
 			line = strings.TrimSpace(line[:idx])
 		}
 
-		ws, err := parseWorkspaceLine(line)
+		ws, err := parseWorkspaceLine(rootPath, line)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing line %d in %s: %w", lineNum, WorkspacesFileName, err)
 		}
@@ -137,13 +139,13 @@ func parseIgnoreFile(root string) ([]string, error) {
 	return patterns, nil
 }
 
-func parseProjectLine(root string, line string) (*Project, error) {
+func parseProjectLine(rootPath string, line string) (*Project, error) {
 	parts := strings.Split(line, "|")
 	if len(parts) < 2 {
 		return &Project{}, fmt.Errorf("invalid format: expected 'path | url [name] [| url2 name2 ...]'")
 	}
 
-	path := filepath.Join(root, strings.TrimSpace(parts[0]))
+	path := filepath.Join(rootPath, strings.TrimSpace(parts[0]))
 	if path == "" {
 		return &Project{}, fmt.Errorf("empty project path")
 	}
@@ -151,7 +153,7 @@ func parseProjectLine(root string, line string) (*Project, error) {
 	project := &Project{
 		GitRepository: GitRepository{
 			Path:          path,
-			Remotes:       make([]*Remote, 0),
+			Remotes:       make([]*git.Remote, 0),
 			Name:          filepath.Base(path),
 			Type:          RepositoryTypeProject,
 			gitRepository: true,
@@ -179,13 +181,13 @@ func parseProjectLine(root string, line string) (*Project, error) {
 	return project, nil
 }
 
-func parseWorkspaceLine(line string) (*Workspace, error) {
+func parseWorkspaceLine(rootPath string, line string) (*Workspace, error) {
 	parts := strings.Split(line, "|")
 	if len(parts) < 2 {
 		return nil, fmt.Errorf("invalid format: expected 'path | url [name]'")
 	}
 
-	path := strings.TrimSpace(parts[0])
+	path := filepath.Join(rootPath, strings.TrimSpace(parts[0]))
 	if path == "" {
 		return nil, fmt.Errorf("empty workspace path")
 	}
@@ -196,7 +198,7 @@ func parseWorkspaceLine(line string) (*Workspace, error) {
 		return nil, fmt.Errorf("empty remote URL or type for workspace %s", path)
 	}
 
-	var _remote *Remote
+	var _remote *git.Remote
 
 	if "folder" == remotePart {
 		_type = RepositoryTypeFolder
@@ -213,7 +215,7 @@ func parseWorkspaceLine(line string) (*Workspace, error) {
 	return &Workspace{
 		GitRepository: GitRepository{
 			Path:          path,
-			Remotes:       []*Remote{_remote},
+			Remotes:       []*git.Remote{_remote},
 			Name:          filepath.Base(path),
 			Type:          _type,
 			FolderExists:  false,
@@ -224,10 +226,10 @@ func parseWorkspaceLine(line string) (*Workspace, error) {
 	}, nil
 }
 
-func parseRemote(remotePart string, index int) (*Remote, error) {
+func parseRemote(remotePart string, index int) (*git.Remote, error) {
 	fields := strings.Fields(remotePart)
 	if len(fields) == 0 {
-		return &Remote{}, fmt.Errorf("empty remote definition")
+		return &git.Remote{}, fmt.Errorf("empty remote definition")
 	}
 
 	url := fields[0]
@@ -244,7 +246,7 @@ func parseRemote(remotePart string, index int) (*Remote, error) {
 		name = fields[1]
 	}
 
-	return &Remote{
+	return &git.Remote{
 		Name: name,
 		URL:  url,
 	}, nil

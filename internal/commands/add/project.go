@@ -1,10 +1,8 @@
 package add
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gws"
 
 	"charm.land/huh/v2"
@@ -68,14 +66,15 @@ func runAddProject(args []string) error {
 		return fmt.Errorf("failed to add project: %w", err)
 	}
 
-	if autoClone {
-		remotes := git.ToGitRemotesDeprecated(projectToAdd.Remotes)
-		err := git.CloneWorkspace(context.Background(), ws.Root, projectToAdd.Path, remotes, nil)
-
-		if err != nil {
-			return fmt.Errorf("failed to clone repository: %w", err)
-		}
-	}
+	//todo
+	//if autoClone {
+	//	remotes := git.ToGitRemotesDeprecated(projectToAdd.Remotes)
+	//	err := git.CloneWorkspace(context.Background(), ws.Root, projectToAdd.Path, remotes, nil)
+	//
+	//	if err != nil {
+	//		return fmt.Errorf("failed to clone repository: %w", err)
+	//	}
+	//}
 
 	return nil
 }

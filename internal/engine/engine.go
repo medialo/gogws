@@ -24,16 +24,16 @@ type runningJob struct {
 
 // RunJobs runs the given jobs in parallel.
 // It returns a channel of events and a channel of execution results.
-func (engine *Engine) RunJobs(ctx context.Context, jobs []Job) (<-chan Event, <-chan *ExecuteResult) {
+func (engine *Engine) RunJobs(ctx context.Context, jobs []Job) (<-chan Event, <-chan *ExecutionResult) {
 	eventCh := make(chan Event, 100)
-	resultCh := make(chan *ExecuteResult, 1)
+	resultCh := make(chan *ExecutionResult, 1)
 
 	go engine.runJobsInternal(ctx, jobs, eventCh, resultCh)
 
 	return eventCh, resultCh
 }
 
-func (engine *Engine) runJobsInternal(ctx context.Context, jobs []Job, eventCh chan Event, resultCh chan *ExecuteResult) {
+func (engine *Engine) runJobsInternal(ctx context.Context, jobs []Job, eventCh chan Event, resultCh chan *ExecutionResult) {
 	defer close(eventCh)
 	defer close(resultCh)
 

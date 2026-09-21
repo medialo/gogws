@@ -29,15 +29,15 @@ func (r *JobResult) IsSkipped() bool {
 	return r.Skipped
 }
 
-type ExecuteResult struct {
+type ExecutionResult struct {
 	Results        []JobResult
 	aTotalDuration atomic.Int64
 	Stopped        bool
 	StopReason     string
 }
 
-func NewNoExecutionResult() *ExecuteResult {
-	return &ExecuteResult{
+func NewNoExecutionResult() *ExecutionResult {
+	return &ExecutionResult{
 		Results:        make([]JobResult, 0),
 		Stopped:        true,
 		aTotalDuration: atomic.Int64{},
@@ -45,8 +45,8 @@ func NewNoExecutionResult() *ExecuteResult {
 	}
 }
 
-func NewExecuteResult(nb int) *ExecuteResult {
-	return &ExecuteResult{
+func NewExecuteResult(nb int) *ExecutionResult {
+	return &ExecutionResult{
 		Results:        make([]JobResult, 0, nb),
 		aTotalDuration: atomic.Int64{},
 		Stopped:        false,
@@ -54,22 +54,22 @@ func NewExecuteResult(nb int) *ExecuteResult {
 	}
 }
 
-func (r *ExecuteResult) AddResult(result JobResult) {
+func (r *ExecutionResult) AddResult(result JobResult) {
 	r.Results = append(r.Results, result)
 	r.aTotalDuration.Add(int64(result.Duration))
 }
 
-func (r *ExecuteResult) TotalDuration() time.Duration {
+func (r *ExecutionResult) TotalDuration() time.Duration {
 	return time.Duration(r.aTotalDuration.Load())
 }
 
-func (r *ExecuteResult) SortByOrder() {
+func (r *ExecutionResult) SortByOrder() {
 	sort.Slice(r.Results, func(i, j int) bool {
 		return r.Results[i].order < r.Results[j].order
 	})
 }
 
-func (r *ExecuteResult) Succeeded() []JobResult {
+func (r *ExecutionResult) Succeeded() []JobResult {
 	var results []JobResult
 	for _, res := range r.Results {
 		if res.IsSuccess() {
@@ -79,7 +79,7 @@ func (r *ExecuteResult) Succeeded() []JobResult {
 	return results
 }
 
-func (r *ExecuteResult) Failed() []JobResult {
+func (r *ExecutionResult) Failed() []JobResult {
 	var results []JobResult
 	for _, res := range r.Results {
 		if res.IsFailure() {
@@ -89,7 +89,7 @@ func (r *ExecuteResult) Failed() []JobResult {
 	return results
 }
 
-func (r *ExecuteResult) Skipped() []JobResult {
+func (r *ExecutionResult) Skipped() []JobResult {
 	var results []JobResult
 	for _, res := range r.Results {
 		if res.IsSkipped() {
@@ -99,31 +99,31 @@ func (r *ExecuteResult) Skipped() []JobResult {
 	return results
 }
 
-func (r *ExecuteResult) SuccessCount() int {
+func (r *ExecutionResult) SuccessCount() int {
 	return len(r.Succeeded())
 }
 
-func (r *ExecuteResult) FailedCount() int {
+func (r *ExecutionResult) FailedCount() int {
 	return len(r.Failed())
 }
 
-func (r *ExecuteResult) SkippedCount() int {
+func (r *ExecutionResult) SkippedCount() int {
 	return len(r.Skipped())
 }
 
-func (r *ExecuteResult) TotalCount() int {
+func (r *ExecutionResult) TotalCount() int {
 	return len(r.Results)
 }
 
-func (r *ExecuteResult) HasErrors() bool {
+func (r *ExecutionResult) HasErrors() bool {
 	return r.FailedCount() > 0
 }
 
-func (r *ExecuteResult) AllSucceeded() bool {
+func (r *ExecutionResult) AllSucceeded() bool {
 	return r.FailedCount() == 0 && r.SuccessCount() > 0
 }
 
-func (r *ExecuteResult) SuccessLabels() []string {
+func (r *ExecutionResult) SuccessLabels() []string {
 	labels := make([]string, 0, len(r.Succeeded()))
 	for _, res := range r.Succeeded() {
 		if label, err := labelString(res.JobId); err == nil {
@@ -133,7 +133,7 @@ func (r *ExecuteResult) SuccessLabels() []string {
 	return labels
 }
 
-func (r *ExecuteResult) FailedLabels() []string {
+func (r *ExecutionResult) FailedLabels() []string {
 	labels := make([]string, 0, len(r.Failed()))
 	for _, res := range r.Failed() {
 		if label, err := labelString(res.JobId); err == nil {
@@ -143,7 +143,7 @@ func (r *ExecuteResult) FailedLabels() []string {
 	return labels
 }
 
-func (r *ExecuteResult) SkippedLabels() []string {
+func (r *ExecutionResult) SkippedLabels() []string {
 	labels := make([]string, 0, len(r.Skipped()))
 	for _, res := range r.Skipped() {
 		if label, err := labelString(res.JobId); err == nil {

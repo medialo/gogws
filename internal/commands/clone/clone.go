@@ -10,7 +10,7 @@ import (
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/engine"
 	"github.com/medialo/gogws/internal/git"
-	"github.com/medialo/gogws/internal/gws"
+	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/hooks"
 	"github.com/medialo/gogws/internal/ui/cli"
 	engineui "github.com/medialo/gogws/internal/ui/engineui"
@@ -39,12 +39,12 @@ func runClone(getConfig func() *config.Config, args []string) error {
 
 	slog.Debug("Running clone command", "workspace", cfg.WorkspaceRoot)
 
-	ws, err := gws.New(cfg.WorkspaceRoot).Recursive(false).Load()
+	ws, err := gws2.NewFromPath(cfg.WorkspaceRoot).Recursive(false).Load()
 	if err != nil {
 		return fmt.Errorf("failed to load projects: %w", err)
 	}
 
-	projectMap := make(map[string]gws.Project)
+	projectMap := make(map[string]*gws2.Project)
 	for _, project := range ws.Projects {
 		projectMap[project.Path] = project
 	}
@@ -75,14 +75,10 @@ func runClone(getConfig func() *config.Config, args []string) error {
 			continue
 		}
 
-		remotes := git.ToGitRemotesDeprecated(project.Remotes)
-		wsRoot := cfg.WorkspaceRoot
-		projectPath := project.Path
-
 		jobs = append(jobs, engine.Job{
 			JobNameId: repoPath,
 			Fn: func(ctx context.Context, notify engine.Notify) error {
-				return git.CloneWorkspace(ctx, wsRoot, projectPath, remotes, engine.WrapRunner(notify))
+				return git.CloneWorkspace(ctx, project.GetOriginRemote(), project.Name, engine.WrapRunner(notify))
 			},
 		})
 	}

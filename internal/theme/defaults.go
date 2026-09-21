@@ -36,18 +36,22 @@ type Theme struct {
 }
 
 type Icons struct {
-	Success   string
-	Warning   string
-	Error     string
-	Info      string
-	Pending   string
-	Workspace string
-	Root      string
-	Folder    string
+	Success    string
+	Warning    string
+	Error      string
+	Info       string
+	Pending    string
+	Workspace  string
+	Root       string
+	Folder     string
+	OpenFolder string
 }
 
 type Emoji struct {
-	Folder string
+	Folder     string
+	OpenFolder string
+	CrossMark  string
+	CheckMark  string
 }
 
 var DefaultTheme = Theme{
@@ -93,11 +97,17 @@ var DefaultTheme = Theme{
 		Root:      "⁜",
 		Folder: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("227")).
-			Bold(true).Render("🗀"),
+			Bold(true).Render("🗀 "),
+		OpenFolder: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("227")).
+			Bold(true).Render("🗁 "),
 	},
 
 	Emoji: Emoji{
-		Folder: "📁",
+		Folder:     "📁",
+		OpenFolder: "📂",
+		CrossMark:  "❌",
+		CheckMark:  "✅",
 	},
 }
 

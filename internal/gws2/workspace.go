@@ -3,6 +3,7 @@ package gws2
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/medialo/gogws/internal/git"
@@ -28,6 +29,7 @@ type Repository interface {
 	GetName() string
 	GetType() RepositoryType
 	IsGitRepository() bool
+	FolderExist() bool
 }
 
 func (gr *GitRepository) Id() int {
@@ -48,6 +50,10 @@ func (gr *GitRepository) GetType() RepositoryType {
 
 func (gr *GitRepository) IsGitRepository() bool {
 	return gr.gitRepository
+}
+
+func (gr *GitRepository) FolderExist() bool {
+	return gr.FolderExists
 }
 
 type GitRepository struct {
@@ -71,6 +77,18 @@ type Workspace struct {
 	Children            []*Workspace
 	WorkspaceConfigFile *ConfigFile
 	ProjectConfigFile   *ConfigFile
+}
+
+func NewRootWorkspace(path string) *Workspace {
+	return &Workspace{
+		id:            -1,
+		Path:          path,
+		FolderExists:  true,
+		Name:          filepath.Base(path),
+		gitRepository: git.IsGitFolder(path),
+		Projects:      []*Project{},
+		Children:      []*Workspace{},
+	}
 }
 
 // todo: this is a hack, remove letter
@@ -204,11 +222,13 @@ func (gr *GitRepository) GetUpstreamRemote() *git.Remote {
 }
 
 func (w *Workspace) MissingWorkspaces() []*Workspace {
-	var missings = make([]*Workspace, len(w.Children))
+	var missings = make([]*Workspace, 0, len(w.Children))
 	for _, child := range w.Children {
+		//if child.Type == RepositoryTypeFolder {
+		//	continue
+		//}
 		_, err := os.Stat(child.Path)
 		if os.IsNotExist(err) {
-			fmt.Println("Folder does not exist")
 			missings = append(missings, child)
 		}
 	}
@@ -216,7 +236,7 @@ func (w *Workspace) MissingWorkspaces() []*Workspace {
 }
 
 func (w *Workspace) MissingProjects() []*Project {
-	var missings = make([]*Project, len(w.Projects))
+	var missings = make([]*Project, 0, len(w.Projects))
 	for _, project := range w.Projects {
 		_, err := os.Stat(project.Path)
 		if os.IsNotExist(err) {

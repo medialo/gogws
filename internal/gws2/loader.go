@@ -5,8 +5,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-
-	"github.com/medialo/gogws/internal/git"
 )
 
 type Loader struct {
@@ -54,7 +52,8 @@ func (l *Loader) MaxDepth(depth int) *Loader {
 
 func (l *Loader) Load() (*Workspace, error) {
 	slog.Debug("Loading workspace loader...", "path", l.root)
-	ws, err := l.loadRecursive(l.root, 0)
+	ws, err := l.loadRecursiveInit(l.root)
+	// todo check lock, si invalid la command doctor a besoin d'un contexte valide donc loop inifini coté user
 	if ws == nil || (l.runDoctor && !ws.IsValid()) {
 		return nil, fmt.Errorf("workspace is in invalid state, please run 'gogws doctor' to show diagnostics")
 	}
@@ -62,10 +61,16 @@ func (l *Loader) Load() (*Workspace, error) {
 	return ws, err
 }
 
-func (l *Loader) loadRecursive(root string, depth int) (*Workspace, error) {
+func (l *Loader) loadRecursiveInit(rootPath string) (*Workspace, error) {
+	ws := NewRootWorkspace(rootPath)
+
+	return l.loadRecursive(ws, rootPath, 0)
+}
+
+func (l *Loader) loadRecursive(wsRootForCurrRecurCall *Workspace, rootPath string, depth int) (*Workspace, error) {
 
 	actualRoot, err := os.Getwd()
-	err = os.Chdir(root)
+	err = os.Chdir(rootPath)
 	if err != nil {
 		return nil, err
 	}
@@ -76,98 +81,82 @@ func (l *Loader) loadRecursive(root string, depth int) (*Workspace, error) {
 		}
 	}(actualRoot)
 
-	if l.visited[root] {
-		slog.Debug("Skipping already visited workspace", "path", root)
+	if l.visited[rootPath] {
+		slog.Debug("Skipping already visited workspace", "path", rootPath)
 		return nil, nil
 	}
-	l.visited[root] = true
+	l.visited[rootPath] = true
 
 	if depth > l.maxDepth {
-		slog.Warn("Maximum workspace depth reached", "path", root)
+		slog.Warn("Maximum workspace depth reached", "path", rootPath)
 		return nil, nil
 	}
 
-	slog.Debug("Loading workspace", "depth", depth, "path", root)
+	slog.Debug("Loading workspace", "depth", depth, "path", rootPath)
 
-	ws := &Workspace{
-		GitRepository: GitRepository{
-			id:            -1,
-			Path:          root,
-			FolderExists:  true,
-			Name:          filepath.Base(root),
-			gitRepository: git.IsGitFolder(root),
-		},
-		Projects: []*Project{},
-		Children: []*Workspace{},
-	}
-
-	_, projectsLocation := getProjectsConfigFileLocation(root)
+	_, projectsLocation := getProjectsConfigFileLocation(rootPath)
 	if projectsLocation != nil {
 		if projectsLocation.HasDuplicate {
-			legacyPath := filepath.Join(root, ProjectsFileName)
+			legacyPath := filepath.Join(rootPath, ProjectsFileName)
 			slog.Warn("Duplicate projects file found - using .gws/projects.gws, please remove the legacy file",
 				"legacy", legacyPath,
 				"used", projectsLocation.Path)
 		}
 
-		projects, err := parseProjectsFile(root)
+		projectsFromFile, err := parseProjectsFile(rootPath)
 		if err != nil {
-			slog.Warn("Failed to read projects", "path", root, "err", err)
+			slog.Warn("Failed to read projects", "path", rootPath, "err", err)
 		} else {
-			for _, p := range projects {
-				projectPath := filepath.Join(root, p.Path)
-				if _, err := os.Stat(projectPath); err == nil {
+			for _, p := range projectsFromFile {
+				if _, err := os.Stat(p.Path); err == nil {
 					p.FolderExists = true
 				} else {
 					p.FolderExists = false
 				}
-				ws.Projects = append(ws.Projects, p)
+				wsRootForCurrRecurCall.Projects = append(wsRootForCurrRecurCall.Projects, p)
 			}
 		}
 	}
 
-	_, workspacesLocation := getWorkspacesConfigFileLocation(root)
+	_, workspacesLocation := getWorkspacesConfigFileLocation(rootPath)
 	if workspacesLocation != nil {
 		if workspacesLocation.HasDuplicate {
-			legacyPath := filepath.Join(root, WorkspacesFileName)
+			legacyPath := filepath.Join(rootPath, WorkspacesFileName)
 			slog.Warn("Duplicate workspaces file found - using .gws/workspaces.gws, please remove the legacy file",
 				"legacy", legacyPath,
 				"used", workspacesLocation.Path)
 		}
 
-		childRefs, err := parseWorkspacesFile(root)
+		workspacesFromFile, err := parseWorkspacesFile(rootPath)
 		if err != nil {
-			slog.Warn("Failed to read workspaces", "path", root, "err", err)
+			slog.Warn("Failed to read workspaces", "path", rootPath, "err", err)
 		} else {
-			for _, childRepository := range childRefs {
+			for _, childRepository := range workspacesFromFile {
 				if childRepository.Path == "." { // skip current workspace already added
 					continue
 				}
-				nextRootPath := filepath.Join(root, childRepository.Path)
+				nextRootPath := childRepository.Path
 				if _, err := os.Stat(nextRootPath); err == nil {
 					childRepository.FolderExists = true
 
 					if l.recursive {
-						resolved, err := l.loadRecursive(nextRootPath, depth+1)
+						resolved, err := l.loadRecursive(childRepository, nextRootPath, depth+1)
 						if err != nil {
 							childRepository.Error = err
 						} else if resolved != nil {
-							//childRepository.Root = resolved.Root
-							//childRepository.Projects = resolved.Projects
-							//childRepository.Children = resolved.Children
-							ws.Children = append(ws.Children, resolved)
+							wsRootForCurrRecurCall.Children = append(wsRootForCurrRecurCall.Children, resolved)
 						}
 					}
 				} else {
-					ws.Children = append(ws.Children, childRepository)
+					wsRootForCurrRecurCall.Children = append(wsRootForCurrRecurCall.Children, childRepository)
 				}
 
 			}
 		}
 	}
 
-	slog.Debug(" > gws2 > Loaded workspace", "path", root, "projects", len(ws.Projects), "children", len(ws.Children))
-	return ws, nil
+	slog.Debug(" > gws2 > Loaded workspace", "path", rootPath, "projects", len(wsRootForCurrRecurCall.Projects), "children", len(wsRootForCurrRecurCall.Children))
+	return wsRootForCurrRecurCall, nil
 }
 
 // FindRoot searches for the root of a workspace starting from the current
