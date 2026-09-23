@@ -101,12 +101,34 @@ func (r *Renderer) RenderError(message string) string {
 	return r.theme.Error.Render(r.theme.Icons.Error + " " + message)
 }
 
+func (r *Renderer) RenderInfoWithIcon(message string) string {
+	return r.theme.Info.Render(r.theme.Icons.Info + "  " + message)
+}
+
 func (r *Renderer) RenderInfo(message string) string {
-	return r.theme.Info.Render(r.theme.Icons.Info + " " + message)
+	return r.theme.Info.Render(message)
 }
 
 func (r *Renderer) RenderWarning(message string) string {
 	return r.theme.Warning.Render(r.theme.Icons.Warning + " " + message)
+}
+
+func (r *Renderer) RenderRepoStatus(name, status string, nameWidth int) string {
+	var style lipgloss.Style
+	switch status {
+	case "Known":
+		style = r.theme.Success
+	case "Unknown":
+		style = r.theme.Error
+	case "Missing":
+		style = r.theme.Warning
+	case "Ignored":
+		style = r.theme.Subtle
+	default:
+		style = r.theme.Info
+	}
+
+	return fmt.Sprintf("  %s %s", padRight(name, nameWidth), style.Render(status))
 }
 
 func (r *Renderer) Theme() theme.Theme {

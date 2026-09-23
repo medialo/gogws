@@ -3,18 +3,24 @@ package check
 import (
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"sort"
 
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/hooks"
 	"github.com/medialo/gogws/internal/ui/cli"
-
 	"github.com/spf13/cobra"
+	"golang.org/x/text/feature/plural"
 )
 
+var checkFlagShowKnown bool
+var checkFlagShowPath bool
+
 func NewCommand(getConfig func() *config.Config) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "check",
 		Short: "Check workspace consistency",
 		Long: `Check the workspace for all repositories (known, unknown, ignored, missing).
@@ -23,6 +29,11 @@ This can be slow for large workspaces.`,
 			return runCheck(getConfig)
 		},
 	}
+
+	cmd.Flags().BoolVar(&checkFlagShowKnown, "show-known", false, "list known repositories individually instead of a single summary count")
+	cmd.Flags().BoolVar(&checkFlagShowPath, "show-path", false, "display the full path of each repository")
+
+	return cmd
 }
 
 func runCheck(getConfig func() *config.Config) error {
@@ -45,43 +56,98 @@ func runCheck(getConfig func() *config.Config) error {
 
 	renderer := cli.NewRenderer()
 
-	fmt.Println(renderer.RenderInfo("Checking known repositories..."))
-
-	missing := 0
-	for _, project := range ws.Projects {
-		status := git.GetStatus(project.Path)
-		if !status.Exists {
-			fmt.Println(renderer.RenderError(fmt.Sprintf("Missing: %s", project.Path)))
-			missing++
-		}
+	knownByPath := make(map[string]gws2.Repository, len(ws.Projects)+len(ws.Children))
+	for _, p := range ws.Projects {
+		knownByPath[filepath.Clean(p.Path)] = p
+	}
+	for _, c := range ws.Children {
+		knownByPath[filepath.Clean(c.Path)] = c
 	}
 
-	if missing == 0 {
-		fmt.Println(renderer.RenderSuccess("All known repositories are present"))
-	} else {
-		fmt.Println(renderer.RenderWarning(fmt.Sprintf("%d repositories are missing", missing)))
-	}
-
-	fmt.Println()
-	fmt.Println(renderer.RenderInfo("Scanning for unknown repositories..."))
-
-	knownPaths := make([]string, len(ws.Projects))
-	for i, p := range ws.Projects {
-		knownPaths[i] = p.Path
-	}
-
-	unknown, err := git.FindUnknownRepositories(cfg.WorkspaceRoot, knownPaths)
+	discovered, err := git.DiscoverRepositories(cfg.WorkspaceRoot, 0)
 	if err != nil {
-		return fmt.Errorf("failed to check unknown repositories: %w", err)
+		return fmt.Errorf("failed to discover repositories: %w", err)
 	}
 
-	if len(unknown) == 0 {
-		fmt.Println(renderer.RenderSuccess("No unknown repositories found"))
-	} else {
-		fmt.Println(renderer.RenderWarning(fmt.Sprintf("Found %d unknown repositories:", len(unknown))))
-		for _, path := range unknown {
-			fmt.Println(renderer.RenderInfo(fmt.Sprintf("  %s", path)))
+	ignorePatterns, err := gws2.LoadIgnorePatterns(cfg.WorkspaceRoot)
+	if err != nil {
+		return fmt.Errorf("failed to load ignore patterns: %w", err)
+	}
+
+	// The set of repositories to check is the union of the known projects
+	// (some of which may be missing on disk) and every git repository
+	// discovered on disk (some of which may be unknown or ignored).
+	allPaths := make(map[string]bool, len(knownByPath)+len(discovered))
+	for path := range knownByPath {
+		allPaths[path] = true
+	}
+	for _, repo := range discovered {
+		allPaths[filepath.Clean(filepath.Join(cfg.WorkspaceRoot, repo.Path))] = true
+	}
+
+	sortedPaths := make([]string, 0, len(allPaths))
+	for path := range allPaths {
+		sortedPaths = append(sortedPaths, path)
+	}
+	sort.Strings(sortedPaths)
+
+	fmt.Println(renderer.RenderInfoWithIcon(fmt.Sprintf("Checking %d repositories...", len(sortedPaths))))
+
+	type checkEntry struct {
+		label  string
+		status string
+	}
+
+	var entries []checkEntry
+	var unknown []string
+	knownCount := 0
+	missingCount := 0
+
+	for _, path := range sortedPaths {
+		label := filepath.Base(path)
+		if checkFlagShowPath {
+			label = fmt.Sprintf("%s (%s)", label, path)
 		}
+
+		switch {
+		case gws2.IsPathIgnored(path, ignorePatterns):
+			entries = append(entries, checkEntry{label, "Ignored"})
+		case !isGitRepoDir(path):
+			missingCount++
+			entries = append(entries, checkEntry{label, "Missing"})
+		case knownByPath[path] != nil:
+			knownCount++
+			if checkFlagShowKnown {
+				entries = append(entries, checkEntry{label, "Known"})
+			}
+		default:
+			relPath, err := filepath.Rel(cfg.WorkspaceRoot, path)
+			if err != nil {
+				relPath = path
+			}
+			unknown = append(unknown, relPath)
+			entries = append(entries, checkEntry{label, "Unknown"})
+		}
+	}
+
+	nameWidth := 0
+	for _, e := range entries {
+		if len(e.label) > nameWidth {
+			nameWidth = len(e.label)
+		}
+	}
+
+	for _, e := range entries {
+		fmt.Println(renderer.RenderRepoStatus(e.label, e.status, nameWidth))
+	}
+
+	if !checkFlagShowKnown && knownCount > 0 {
+		fmt.Println(renderer.RenderSuccess(fmt.Sprintf("%d known repositories (use --show-known to list)", knownCount)))
+	}
+
+	if missingCount > 0 {
+		repo := plural.Selectf(missingCount, "%d", plural.One, "repository", plural.Other, "repositories")
+		fmt.Println(renderer.RenderInfoWithIcon(fmt.Sprintf("Use 'gogws update' to clone the %d missing %s", missingCount, repo)))
 	}
 
 	if err := hooks.PostCheck(cfg.WorkspaceRoot, unknown); err != nil {
@@ -89,4 +155,9 @@ func runCheck(getConfig func() *config.Config) error {
 	}
 
 	return nil
+}
+
+func isGitRepoDir(path string) bool {
+	_, err := os.Stat(filepath.Join(path, ".git"))
+	return err == nil
 }

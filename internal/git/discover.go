@@ -106,22 +106,32 @@ func getRemotesExec(repoPath string) ([]Remote, error) {
 }
 
 func FindUnknownRepositories(rootPath string, knownPaths []string) ([]string, error) {
-	allRepos, err := DiscoverRepositories(rootPath, 10)
+	allRepos, err := DiscoverRepositories(rootPath, 0)
 	if err != nil {
 		return nil, err
 	}
 
+	// DiscoverRepositories reports paths relative to rootPath, while known
+	// paths may be absolute (e.g. gws2 project paths) or relative — normalize
+	// both to absolute paths anchored at rootPath before comparing.
 	known := make(map[string]bool)
 	for _, path := range knownPaths {
-		known[path] = true
+		known[normalizeRepoPath(rootPath, path)] = true
 	}
 
 	var unknown []string
 	for _, repo := range allRepos {
-		if !known[repo.Path] {
+		if !known[normalizeRepoPath(rootPath, repo.Path)] {
 			unknown = append(unknown, repo.Path)
 		}
 	}
 
 	return unknown, nil
+}
+
+func normalizeRepoPath(rootPath, path string) string {
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	return filepath.Clean(filepath.Join(rootPath, path))
 }

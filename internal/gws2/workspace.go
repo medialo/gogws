@@ -30,6 +30,10 @@ type Repository interface {
 	GetType() RepositoryType
 	IsGitRepository() bool
 	FolderExist() bool
+	// Index returns the shared path index for the tree this Repository
+	// belongs to, or nil if it was never attached to one (e.g. built
+	// outside of Loader.Load()).
+	Index() *Index
 }
 
 func (gr *GitRepository) Id() int {
@@ -56,6 +60,16 @@ func (gr *GitRepository) FolderExist() bool {
 	return gr.FolderExists
 }
 
+func (gr *GitRepository) Index() *Index {
+	return gr.index
+}
+
+// setIndex attaches the shared path index. Unexported: only the loader and
+// AddProject/AddWorkspace are expected to wire this up.
+func (gr *GitRepository) setIndex(idx *Index) {
+	gr.index = idx
+}
+
 type GitRepository struct {
 	id            int
 	Path          string // Path of the repository from the gws config file, can be ".", use GetPath() to get real path
@@ -64,6 +78,7 @@ type GitRepository struct {
 	FolderExists  bool
 	gitRepository bool
 	Type          RepositoryType
+	index         *Index
 }
 
 type Project struct {
@@ -125,12 +140,39 @@ func (w *Workspace) FlattenWorkspaces() []*Workspace {
 	return workspaces
 }
 
+func (w *Workspace) FlattenRepositories() []Repository {
+	repos := make([]Repository, 0, len(w.Projects)+len(w.Children))
+	for _, project := range w.Projects {
+		repos = append(repos, project)
+	}
+	for _, childWorkspace := range w.Children {
+		repos = append(repos, childWorkspace)
+		repos = append(repos, childWorkspace.FlattenRepositories()...)
+	}
+	return repos
+}
+
 func (w *Workspace) AddWorkspace(childWorkspace *Workspace) {
 	w.Children = append(w.Children, childWorkspace)
+	if idx := w.Index(); idx != nil {
+		childWorkspace.setIndex(idx)
+		idx.put(childWorkspace)
+	}
 }
 
 func (w *Workspace) AddProject(project *Project) {
 	w.Projects = append(w.Projects, project)
+	if idx := w.Index(); idx != nil {
+		project.setIndex(idx)
+		idx.put(project)
+	}
+}
+
+func (w *Workspace) ReindexAll() {
+	if w.Index() == nil {
+		w.setIndex(NewIndex())
+	}
+	w.Index().Rebuild(w)
 }
 
 func (w *Workspace) SaveAll() error {

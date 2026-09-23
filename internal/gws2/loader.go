@@ -12,7 +12,6 @@ type Loader struct {
 	recursive bool
 	maxDepth  int
 	runDoctor bool
-	visited   map[string]bool
 }
 
 func NewFromAutoRoot() (*Loader, error) {
@@ -31,7 +30,6 @@ func NewFromPath(path string) *Loader {
 		recursive: true,
 		maxDepth:  DefaultMaxDepth,
 		runDoctor: true,
-		visited:   make(map[string]bool),
 	}
 }
 
@@ -63,33 +61,24 @@ func (l *Loader) Load() (*Workspace, error) {
 
 func (l *Loader) loadRecursiveInit(rootPath string) (*Workspace, error) {
 	ws := NewRootWorkspace(rootPath)
+	ws.setIndex(NewIndex())
 
 	return l.loadRecursive(ws, rootPath, 0)
 }
 
 func (l *Loader) loadRecursive(wsRootForCurrRecurCall *Workspace, rootPath string, depth int) (*Workspace, error) {
-
-	actualRoot, err := os.Getwd()
-	err = os.Chdir(rootPath)
-	if err != nil {
-		return nil, err
-	}
-	defer func(dir string) {
-		err := os.Chdir(dir)
-		if err != nil {
-
-		}
-	}(actualRoot)
-
-	if l.visited[rootPath] {
+	idx := wsRootForCurrRecurCall.Index()
+	if idx.Has(rootPath) {
 		slog.Debug("Skipping already visited workspace", "path", rootPath)
-		return nil, nil
+		wsRootForCurrRecurCall.Error = fmt.Errorf("workspace already visited (possible cycle): %s", rootPath)
+		return wsRootForCurrRecurCall, nil
 	}
-	l.visited[rootPath] = true
+	idx.put(wsRootForCurrRecurCall)
 
 	if depth > l.maxDepth {
 		slog.Warn("Maximum workspace depth reached", "path", rootPath)
-		return nil, nil
+		wsRootForCurrRecurCall.Error = fmt.Errorf("maximum workspace depth (%d) reached at: %s", l.maxDepth, rootPath)
+		return wsRootForCurrRecurCall, nil
 	}
 
 	slog.Debug("Loading workspace", "depth", depth, "path", rootPath)
@@ -113,7 +102,7 @@ func (l *Loader) loadRecursive(wsRootForCurrRecurCall *Workspace, rootPath strin
 				} else {
 					p.FolderExists = false
 				}
-				wsRootForCurrRecurCall.Projects = append(wsRootForCurrRecurCall.Projects, p)
+				wsRootForCurrRecurCall.AddProject(p)
 			}
 		}
 	}
@@ -140,15 +129,22 @@ func (l *Loader) loadRecursive(wsRootForCurrRecurCall *Workspace, rootPath strin
 					childRepository.FolderExists = true
 
 					if l.recursive {
+						// The child must carry the shared index before it
+						// recurses, so its own cycle check and registration
+						// land in the same index as everyone else's.
+						childRepository.setIndex(idx)
 						resolved, err := l.loadRecursive(childRepository, nextRootPath, depth+1)
 						if err != nil {
 							childRepository.Error = err
+							wsRootForCurrRecurCall.AddWorkspace(childRepository)
 						} else if resolved != nil {
-							wsRootForCurrRecurCall.Children = append(wsRootForCurrRecurCall.Children, resolved)
+							wsRootForCurrRecurCall.AddWorkspace(resolved)
 						}
+					} else {
+						wsRootForCurrRecurCall.AddWorkspace(childRepository)
 					}
 				} else {
-					wsRootForCurrRecurCall.Children = append(wsRootForCurrRecurCall.Children, childRepository)
+					wsRootForCurrRecurCall.AddWorkspace(childRepository)
 				}
 
 			}
