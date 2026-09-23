@@ -132,12 +132,13 @@ func TestParseProjectLine_EmptyRemotePart(t *testing.T) {
 
 func TestParseWorkspaceLine_Valid(t *testing.T) {
 	line := "/home/user/ws | https://github.com/user/ws.git"
-	ws, err := parseWorkspaceLine(line)
+	ws, err := parseWorkspaceLine("", line)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if ws.AbsolutePath != "/home/user/ws" {
-		t.Errorf("AbsolutePath = %q, want %q", ws.AbsolutePath, "/home/user/ws")
+	wantPath := filepath.Join("", "/home/user/ws")
+	if ws.AbsolutePath != wantPath {
+		t.Errorf("AbsolutePath = %q, want %q", ws.AbsolutePath, wantPath)
 	}
 	if ws.Name != "ws" {
 		t.Errorf("Name = %q, want %q", ws.Name, "ws")
@@ -148,21 +149,21 @@ func TestParseWorkspaceLine_Valid(t *testing.T) {
 }
 
 func TestParseWorkspaceLine_MissingURL(t *testing.T) {
-	_, err := parseWorkspaceLine("/home/user/ws | ")
+	_, err := parseWorkspaceLine("", "/home/user/ws | ")
 	if err == nil {
 		t.Fatal("expected error for empty remote URL")
 	}
 }
 
 func TestParseWorkspaceLine_InvalidFormat(t *testing.T) {
-	_, err := parseWorkspaceLine("/home/user/ws")
+	_, err := parseWorkspaceLine("", "/home/user/ws")
 	if err == nil {
 		t.Fatal("expected error for invalid format")
 	}
 }
 
 func TestParseWorkspaceLine_EmptyPath(t *testing.T) {
-	_, err := parseWorkspaceLine(" | https://github.com/user/ws.git")
+	_, err := parseWorkspaceLine("", " | https://github.com/user/ws.git")
 	if err == nil {
 		t.Fatal("expected error for empty path")
 	}
@@ -172,8 +173,8 @@ func TestParseWorkspaceLine_EmptyPath(t *testing.T) {
 
 func TestFilterIgnoredProjects_NoPatterns(t *testing.T) {
 	projects := []*Project{
-		{GitRepository: GitRepository{AbsolutePath: "/root/a"}},
-		{GitRepository: GitRepository{AbsolutePath: "/root/b"}},
+		{GitRepository: GitRepository{Entry: Entry{AbsolutePath: "/root/a"}}},
+		{GitRepository: GitRepository{Entry: Entry{AbsolutePath: "/root/b"}}},
 	}
 	result := filterIgnoredProjects(projects, nil)
 	if len(result) != 2 {
@@ -183,8 +184,8 @@ func TestFilterIgnoredProjects_NoPatterns(t *testing.T) {
 
 func TestFilterIgnoredProjects_MatchesOne(t *testing.T) {
 	projects := []*Project{
-		{GitRepository: GitRepository{AbsolutePath: "/root/ignore-me"}},
-		{GitRepository: GitRepository{AbsolutePath: "/root/keep-me"}},
+		{GitRepository: GitRepository{Entry: Entry{AbsolutePath: "/root/ignore-me"}}},
+		{GitRepository: GitRepository{Entry: Entry{AbsolutePath: "/root/keep-me"}}},
 	}
 	result := filterIgnoredProjects(projects, []string{"ignore-me"})
 	if len(result) != 1 {
@@ -197,8 +198,8 @@ func TestFilterIgnoredProjects_MatchesOne(t *testing.T) {
 
 func TestFilterIgnoredProjects_MatchesAll(t *testing.T) {
 	projects := []*Project{
-		{GitRepository: GitRepository{AbsolutePath: "/root/a"}},
-		{GitRepository: GitRepository{AbsolutePath: "/root/b"}},
+		{GitRepository: GitRepository{Entry: Entry{AbsolutePath: "/root/a"}}},
+		{GitRepository: GitRepository{Entry: Entry{AbsolutePath: "/root/b"}}},
 	}
 	result := filterIgnoredProjects(projects, []string{"/root/"})
 	if len(result) != 0 {
@@ -208,7 +209,7 @@ func TestFilterIgnoredProjects_MatchesAll(t *testing.T) {
 
 func TestFilterIgnoredProjects_InvalidRegexp(t *testing.T) {
 	projects := []*Project{
-		{GitRepository: GitRepository{AbsolutePath: "/root/a"}},
+		{GitRepository: GitRepository{Entry: Entry{AbsolutePath: "/root/a"}}},
 	}
 	// pattern invalide → ignoré silencieusement, aucun projet filtré
 	result := filterIgnoredProjects(projects, []string{"[invalid"})

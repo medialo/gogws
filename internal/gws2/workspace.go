@@ -9,15 +9,6 @@ import (
 	"github.com/medialo/gogws/internal/git"
 )
 
-type RepositoryType int
-
-//go:generate go tool enumer -type=RepositoryType -trimprefix RepositoryType
-const (
-	RepositoryTypeProject RepositoryType = iota
-	RepositoryTypeWorkspace
-	RepositoryTypeFolder
-)
-
 type ConfigFile struct {
 	Path   string
 	Legacy bool
@@ -27,7 +18,6 @@ type Repository interface {
 	Id() int
 	GetPath() string
 	GetName() string
-	GetType() RepositoryType
 	IsGitRepository() bool
 	FolderExist() bool
 	// Index returns the shared path index for the tree this Repository
@@ -36,50 +26,78 @@ type Repository interface {
 	Index() *Index
 }
 
-func (gr *GitRepository) Id() int {
-	return gr.id
+// Entry is the common identity of anything registered under a workspace: a
+// resolved absolute path, the path as written in its config file, a
+// display name, and whether it exists on disk. It makes no claim about
+// git — see GitRepository for that — and no claim about project-vs-
+// workspace-ness, which is simply the concrete Go type (Project or
+// Workspace) that embeds it.
+type Entry struct {
+	id           int
+	AbsolutePath string // Absolute filesystem path (rootPath joined with RelativePath); use GetPath() to read it
+	RelativePath string // Path exactly as written in the gws config file (e.g. "sub/project" or "."), unmodified; written back as-is by formatBaseRepository so save never leaks a machine-specific absolute path
+	Name         string // Name represents the display name, based on the last part of the path
+	FolderExists bool
+	index        *Index
 }
 
-func (gr *GitRepository) GetPath() string {
-	return gr.AbsolutePath
+func (e *Entry) Id() int {
+	return e.id
 }
 
-func (gr *GitRepository) GetName() string {
-	return gr.Name
+func (e *Entry) GetPath() string {
+	return e.AbsolutePath
 }
 
-func (gr *GitRepository) GetType() RepositoryType {
-	return gr.Type
+func (e *Entry) GetName() string {
+	return e.Name
 }
 
-func (gr *GitRepository) IsGitRepository() bool {
-	return gr.gitRepository
+func (e *Entry) FolderExist() bool {
+	return e.FolderExists
 }
 
-func (gr *GitRepository) FolderExist() bool {
-	return gr.FolderExists
-}
-
-func (gr *GitRepository) Index() *Index {
-	return gr.index
+func (e *Entry) Index() *Index {
+	return e.index
 }
 
 // setIndex attaches the shared path index. Unexported: only the loader and
 // AddProject/AddWorkspace are expected to wire this up.
-func (gr *GitRepository) setIndex(idx *Index) {
-	gr.index = idx
+func (e *Entry) setIndex(idx *Index) {
+	e.index = idx
 }
 
+// effectivePath returns RelativePath if set, else AbsolutePath — used when
+// writing an entry back to its .gws config file so a save never leaks a
+// machine-specific absolute path.
+func (e *Entry) effectivePath() string {
+	if e.RelativePath != "" {
+		return e.RelativePath
+	}
+	return e.AbsolutePath
+}
+
+// GitRepository is an Entry that is always git-backed: a Project always
+// is. (A sub-Workspace may or may not be — see Workspace.)
 type GitRepository struct {
-	id            int
-	AbsolutePath  string // Absolute filesystem path (rootPath joined with RelativePath); use GetPath() to read it
-	RelativePath  string // Path exactly as written in the gws config file (e.g. "sub/project" or "."), unmodified; written back as-is by formatBaseRepository so save never leaks a machine-specific absolute path
-	Name          string // Name represents the name of the Git repository based on the last part of the path
-	Remotes       []*git.Remote
-	FolderExists  bool
-	gitRepository bool
-	Type          RepositoryType
-	index         *Index
+	Entry
+	Remotes []*git.Remote
+}
+
+func (gr *GitRepository) IsGitRepository() bool {
+	return len(gr.Remotes) > 0
+}
+
+func (gr *GitRepository) GetOriginRemote() *git.Remote {
+	return originRemote(gr.Remotes)
+}
+
+func (gr *GitRepository) GetUpstreamRemote() *git.Remote {
+	return upstreamRemote(gr.Remotes)
+}
+
+func (gr *GitRepository) formatBaseRepository() string {
+	return formatEntryLine(gr.effectivePath(), gr.Remotes)
 }
 
 type Project struct {
@@ -87,7 +105,8 @@ type Project struct {
 }
 
 type Workspace struct {
-	GitRepository
+	Entry
+	Remotes             []*git.Remote // nil for a plain folder workspace, populated for a git-backed sub-workspace
 	Error               error
 	Projects            []*Project
 	Children            []*Workspace
@@ -95,15 +114,64 @@ type Workspace struct {
 	ProjectConfigFile   *ConfigFile
 }
 
+func (w *Workspace) IsGitRepository() bool {
+	return len(w.Remotes) > 0
+}
+
+func (w *Workspace) GetOriginRemote() *git.Remote {
+	return originRemote(w.Remotes)
+}
+
+func (w *Workspace) GetUpstreamRemote() *git.Remote {
+	return upstreamRemote(w.Remotes)
+}
+
+func (w *Workspace) formatBaseRepository() string {
+	return formatEntryLine(w.effectivePath(), w.Remotes)
+}
+
+func originRemote(remotes []*git.Remote) *git.Remote {
+	if len(remotes) > 0 {
+		return remotes[0]
+	}
+	return nil
+}
+
+func upstreamRemote(remotes []*git.Remote) *git.Remote {
+	if len(remotes) > 1 {
+		return remotes[1]
+	}
+	return nil
+}
+
+// formatEntryLine renders one .gws config line for path given its remotes.
+// A folder entry (no remotes) round-trips via the literal "folder" marker
+// that parseWorkspaceLine recognizes.
+func formatEntryLine(path string, remotes []*git.Remote) string {
+	if len(remotes) == 0 {
+		return fmt.Sprintf("%s | folder", path)
+	}
+	var remoteParts []string
+	for _, remote := range remotes {
+		if remote.Name == "origin" {
+			remoteParts = append(remoteParts, remote.URL)
+		} else {
+			remoteParts = append(remoteParts, fmt.Sprintf("%s %s", remote.URL, remote.Name))
+		}
+	}
+	return fmt.Sprintf("%s | %s", path, strings.Join(remoteParts, " | "))
+}
+
 func NewRootWorkspace(path string) *Workspace {
 	return &Workspace{
-		id:            -1,
-		AbsolutePath:  path,
-		FolderExists:  true,
-		Name:          filepath.Base(path),
-		gitRepository: git.IsGitFolder(path),
-		Projects:      []*Project{},
-		Children:      []*Workspace{},
+		Entry: Entry{
+			id:           -1,
+			AbsolutePath: path,
+			FolderExists: true,
+			Name:         filepath.Base(path),
+		},
+		Projects: []*Project{},
+		Children: []*Workspace{},
 	}
 }
 
@@ -116,13 +184,13 @@ func NewProject(rootPath, relativePath string, remotes []*git.Remote) *Project {
 	_, err := os.Stat(absPath)
 	return &Project{
 		GitRepository: GitRepository{
-			AbsolutePath:  absPath,
-			RelativePath:  relativePath,
-			Name:          filepath.Base(absPath),
-			Remotes:       remotes,
-			Type:          RepositoryTypeProject,
-			gitRepository: true,
-			FolderExists:  err == nil,
+			Entry: Entry{
+				AbsolutePath: absPath,
+				RelativePath: relativePath,
+				Name:         filepath.Base(absPath),
+				FolderExists: err == nil,
+			},
+			Remotes: remotes,
 		},
 	}
 }
@@ -136,15 +204,13 @@ func NewChildWorkspace(rootPath, relativePath string, remote *git.Remote) *Works
 	absPath := filepath.Join(rootPath, relativePath)
 	_, err := os.Stat(absPath)
 	return &Workspace{
-		GitRepository: GitRepository{
-			AbsolutePath:  absPath,
-			RelativePath:  relativePath,
-			Name:          filepath.Base(absPath),
-			Remotes:       []*git.Remote{remote},
-			Type:          RepositoryTypeWorkspace,
-			gitRepository: true,
-			FolderExists:  err == nil,
+		Entry: Entry{
+			AbsolutePath: absPath,
+			RelativePath: relativePath,
+			Name:         filepath.Base(absPath),
+			FolderExists: err == nil,
 		},
+		Remotes:  []*git.Remote{remote},
 		Projects: []*Project{},
 		Children: []*Workspace{},
 	}
@@ -157,11 +223,10 @@ func NewFolderWorkspace(rootPath, relativePath string) *Workspace {
 	absPath := filepath.Join(rootPath, relativePath)
 	_, err := os.Stat(absPath)
 	return &Workspace{
-		GitRepository: GitRepository{
+		Entry: Entry{
 			AbsolutePath: absPath,
 			RelativePath: relativePath,
 			Name:         filepath.Base(absPath),
-			Type:         RepositoryTypeFolder,
 			FolderExists: err == nil,
 		},
 		Projects: []*Project{},
@@ -172,13 +237,13 @@ func NewFolderWorkspace(rootPath, relativePath string) *Workspace {
 // todo: this is a hack, remove letter
 func (w *Workspace) AddSelfWorkspace() {
 	ws := &Workspace{
-		GitRepository: GitRepository{
+		Entry: Entry{
 			id:           -1,
 			AbsolutePath: "p",
-			Remotes:      w.GitRepository.Remotes,
 			FolderExists: false,
 			Name:         "n",
 		},
+		Remotes: w.Remotes,
 	}
 	w.AddWorkspace(ws)
 }
@@ -361,57 +426,9 @@ func (w *Workspace) SaveProjects() error {
 	return nil
 }
 
-func (gr *GitRepository) formatBaseRepository() string {
-	// RelativePath preserves exactly what was written in the config file.
-	// Entries created programmatically (not parsed from a file) have no
-	// RelativePath yet; fall back to AbsolutePath rather than write nothing.
-	path := gr.RelativePath
-	if path == "" {
-		path = gr.AbsolutePath
-	}
-
-	// A folder workspace has no remote at all; parseWorkspaceLine only
-	// recognizes it back via the literal "folder" marker, so it must be
-	// round-tripped as such rather than as an (empty) remote list.
-	if gr.Type == RepositoryTypeFolder {
-		return fmt.Sprintf("%s | folder", path)
-	}
-
-	var remoteParts []string
-	for _, remote := range gr.Remotes {
-		if remote.Name == "origin" {
-			remoteParts = append(remoteParts, remote.URL)
-		} else {
-			remoteParts = append(remoteParts, fmt.Sprintf("%s %s", remote.URL, remote.Name))
-		}
-	}
-	return fmt.Sprintf("%s | %s", path, strings.Join(remoteParts, " | "))
-}
-
-func (gr *GitRepository) isGitRepository() bool {
-	return len(gr.Remotes) > 0
-}
-
-func (gr *GitRepository) GetOriginRemote() *git.Remote {
-	if len(gr.Remotes) > 0 {
-		return gr.Remotes[0]
-	}
-	return nil
-}
-
-func (gr *GitRepository) GetUpstreamRemote() *git.Remote {
-	if len(gr.Remotes) > 1 {
-		return gr.Remotes[1]
-	}
-	return nil
-}
-
 func (w *Workspace) MissingWorkspaces() []*Workspace {
 	var missings = make([]*Workspace, 0, len(w.Children))
 	for _, child := range w.Children {
-		//if child.Type == RepositoryTypeFolder {
-		//	continue
-		//}
 		_, err := os.Stat(child.AbsolutePath)
 		if os.IsNotExist(err) {
 			missings = append(missings, child)

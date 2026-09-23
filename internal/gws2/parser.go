@@ -153,13 +153,13 @@ func parseProjectLine(rootPath string, line string) (*Project, error) {
 
 	project := &Project{
 		GitRepository: GitRepository{
-			AbsolutePath:  path,
-			RelativePath:  relPath,
-			Remotes:       make([]*git.Remote, 0),
-			Name:          filepath.Base(path),
-			Type:          RepositoryTypeProject,
-			gitRepository: true,
-			FolderExists:  false, // no tested here
+			Entry: Entry{
+				AbsolutePath: path,
+				RelativePath: relPath,
+				Name:         filepath.Base(path),
+				FolderExists: false, // no tested here
+			},
+			Remotes: make([]*git.Remote, 0),
 		},
 	}
 
@@ -195,7 +195,6 @@ func parseWorkspaceLine(rootPath string, line string) (*Workspace, error) {
 		return nil, fmt.Errorf("empty workspace path")
 	}
 
-	var _type RepositoryType
 	remotePart := strings.TrimSpace(parts[1])
 	if remotePart == "" {
 		return nil, fmt.Errorf("empty remote URL or type for workspace %s", path)
@@ -203,10 +202,7 @@ func parseWorkspaceLine(rootPath string, line string) (*Workspace, error) {
 
 	var remotes []*git.Remote
 
-	if "folder" == remotePart {
-		_type = RepositoryTypeFolder
-	} else {
-		_type = RepositoryTypeWorkspace
+	if remotePart != "folder" {
 		remote, err := parseRemote(remotePart, 0)
 		if err != nil {
 			return nil, err
@@ -215,15 +211,13 @@ func parseWorkspaceLine(rootPath string, line string) (*Workspace, error) {
 	}
 
 	return &Workspace{
-		GitRepository: GitRepository{
-			AbsolutePath:  path,
-			RelativePath:  relPath,
-			Remotes:       remotes,
-			Name:          filepath.Base(path),
-			Type:          _type,
-			FolderExists:  false,
-			gitRepository: true, // read from gws config file so is expected to be a git repository
+		Entry: Entry{
+			AbsolutePath: path,
+			RelativePath: relPath,
+			Name:         filepath.Base(path),
+			FolderExists: false,
 		},
+		Remotes:  remotes,
 		Projects: []*Project{},
 		Children: []*Workspace{},
 	}, nil

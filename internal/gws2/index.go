@@ -50,8 +50,9 @@ func (idx *Index) put(repo Repository) {
 }
 
 // SearchByName returns every Repository (project or workspace) whose name
-// contains query (case-insensitive), ordered by name. Filter the result by
-// GetType() if only projects (or only workspaces) are wanted.
+// contains query (case-insensitive), ordered by name. Type-assert the
+// result (e.g. `_, ok := repo.(*Project)`) if only projects (or only
+// workspaces) are wanted.
 func (idx *Index) SearchByName(query string) []Repository {
 	results := make([]Repository, 0)
 	if idx == nil {

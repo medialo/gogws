@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/medialo/gogws/internal/git"
-	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/view"
 )
 
@@ -13,7 +12,7 @@ import (
 func (r *Renderer) renderRepository(repositoryStatusView *view.GitRepositoryStatusView, summary *Summary, onlyChanges bool) (string, []string) {
 	status := repositoryStatusView.GitStatus
 
-	if repositoryStatusView.GwsRepository.GetType() == gws2.RepositoryTypeFolder {
+	if !repositoryStatusView.GwsRepository.IsGitRepository() {
 		if repositoryStatusView.GwsRepository.FolderExist() {
 			summary.Clean++
 			return r.renderFolderRepo(status), []string{}

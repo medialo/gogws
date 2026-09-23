@@ -55,7 +55,7 @@ func (l *Loader) Load() (*Workspace, error) {
 	if ws == nil || (l.runDoctor && !ws.IsValid()) {
 		return nil, fmt.Errorf("workspace is in invalid state, please run 'gogws doctor' to show diagnostics")
 	}
-	slog.Debug("Found projects and workspaces", "projects", len(ws.Projects), "workspaces", len(ws.Children), "rootIsGit", ws.isGitRepository())
+	slog.Debug("Found projects and workspaces", "projects", len(ws.Projects), "workspaces", len(ws.Children), "rootIsGit", ws.IsGitRepository())
 	return ws, err
 }
 

@@ -204,7 +204,7 @@ func cloneWorkspaces(workspaceRoot string, toClone []*gws2.Workspace, parallel i
 		jobs = append(jobs, engine.Job{
 			JobNameId: child.GetPath(),
 			Fn: func(ctx context.Context, notify engine.Notify) error {
-				if gws2.RepositoryTypeFolder != child.Type {
+				if child.IsGitRepository() {
 					return git.CloneWorkspace(ctx, child.GetOriginRemote(), child.GetPath(), engine.WrapRunner(notify))
 				}
 				err := os.MkdirAll(child.GetPath(), 0755)
