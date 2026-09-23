@@ -46,7 +46,7 @@ func runClone(getConfig func() *config.Config, args []string) error {
 
 	projectMap := make(map[string]*gws2.Project)
 	for _, project := range ws.Projects {
-		projectMap[project.Path] = project
+		projectMap[project.GetPath()] = project
 	}
 
 	renderer := cli.NewRenderer()
@@ -62,7 +62,7 @@ func runClone(getConfig func() *config.Config, args []string) error {
 			continue
 		}
 
-		fullPath := filepath.Join(cfg.WorkspaceRoot, project.Path)
+		fullPath := filepath.Join(cfg.WorkspaceRoot, project.GetPath())
 		status := git.GetStatus(fullPath)
 		if status.Exists {
 			fmt.Println(renderer.RenderWarning(fmt.Sprintf("%s: already exists", repoPath)))

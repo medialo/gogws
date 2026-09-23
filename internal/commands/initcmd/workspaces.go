@@ -8,7 +8,7 @@ import (
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gitignore"
-	"github.com/medialo/gogws/internal/gws"
+	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/ui/cli"
 
 	"charm.land/huh/v2"
@@ -47,7 +47,7 @@ func preRunInitWorkspaces(getConfig func() *config.Config) error {
 	if resetWorkspacesGwsFile {
 		cfg := getConfig()
 		slog.Debug("Resetting workspaces.gws file", "resetWorkspacesGwsFile", resetWorkspacesGwsFile)
-		fileLocation, err := gws.DeleteWorkspacesFile(cfg.WorkspaceRoot)
+		fileLocation, err := gws2.DeleteWorkspacesFile(cfg.WorkspaceRoot)
 
 		if fileLocation != "" {
 			fmt.Println(renderer.RenderWarning("Removing workspaces configuration file..."))
@@ -56,7 +56,7 @@ func preRunInitWorkspaces(getConfig func() *config.Config) error {
 			}
 			fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Workspaces configuration file removed")))
 		} else {
-			fmt.Println(renderer.RenderError(fmt.Sprintf("%s already exists. Use --reset to reinitialize", gws.WorkspacesFileName)))
+			fmt.Println(renderer.RenderError(fmt.Sprintf("%s already exists. Use --reset to reinitialize", gws2.WorkspacesFileName)))
 		}
 	}
 	return nil
@@ -129,29 +129,27 @@ func runInitWorkspaces() error {
 	//}
 	//defer file.Close()
 
-	for _, ws := range selectedWorkspaces {
-		err = gws.AddWorkspace(workspaceRoot, &gws.Workspace{
-			Path: ws.Path,
-			Root: ws.Path,
-			Name: ws.Name,
-			Remote: gws.Remote{
-				Name: ws.RemoteName,
-				URL:  ws.RemoteURL,
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("failed to add workspace %s: %w", ws.Path, err)
-		}
+	root, err := gws2.NewFromPath(workspaceRoot).RunDoctor(false).Recursive(false).Load()
+	if err != nil {
+		return fmt.Errorf("failed to resolve workspace: %w", err)
+	}
 
-		//var line string
-		//if ws.RemoteURL != "" {
-		//	line = fmt.Sprintf("%s | %s %s\n", ws.Path, ws.RemoteURL, ws.RemoteName)
-		//} else {
-		//	line = fmt.Sprintf("# %s (no remote configured)\n", ws.Path)
-		//}
-		//if _, err := file.WriteString(line); err != nil {
-		//	return fmt.Errorf("failed to write to %s: %w", workspacesFile, err)
-		//}
+	for _, ws := range selectedWorkspaces {
+		var child *gws2.Workspace
+		if ws.RemoteURL != "" {
+			remoteName := ws.RemoteName
+			if remoteName == "" {
+				remoteName = "origin"
+			}
+			child = gws2.NewChildWorkspace(workspaceRoot, ws.Path, &git.Remote{Name: remoteName, URL: ws.RemoteURL})
+		} else {
+			child = gws2.NewFolderWorkspace(workspaceRoot, ws.Path)
+		}
+		root.AddWorkspace(child)
+	}
+
+	if err := root.SaveWorkspace(); err != nil {
+		return fmt.Errorf("failed to save workspaces: %w", err)
 	}
 
 	fmt.Println()

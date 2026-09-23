@@ -8,7 +8,7 @@ import (
 
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/gitignore"
-	"github.com/medialo/gogws/internal/gws"
+	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/ui/cli"
 
 	"github.com/spf13/cobra"
@@ -97,13 +97,13 @@ func persistentPreInitCommand(getConfig func() *config.Config) error {
 		slog.Debug("Resetting projects.gws file if it exists")
 		cfg := getConfig()
 
-		gwsDir := filepath.Join(cfg.WorkspaceRoot, gws.ConfigDirName)
+		gwsDir := filepath.Join(cfg.WorkspaceRoot, gws2.ConfigDirName)
 		if err := os.MkdirAll(gwsDir, 0755); err != nil {
-			return fmt.Errorf("failed to create %s directory: %w", gws.ConfigDirName, err)
+			return fmt.Errorf("failed to create %s directory: %w", gws2.ConfigDirName, err)
 		}
 
-		projectsFile := filepath.Join(gwsDir, "projects."+gws.FileExtension)
-		legacyProjectsFile := filepath.Join(cfg.WorkspaceRoot, gws.ProjectsFileName)
+		projectsFile := filepath.Join(gwsDir, "projects."+gws2.FileExtension)
+		legacyProjectsFile := filepath.Join(cfg.WorkspaceRoot, gws2.ProjectsFileName)
 
 		fileExists := false
 		if _, err := os.Stat(projectsFile); err == nil {
@@ -119,9 +119,9 @@ func persistentPreInitCommand(getConfig func() *config.Config) error {
 				return fmt.Errorf("failed to remove existing %s: %w", projectsFile, err)
 			}
 			fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Removed existing %s", projectsFile)))
-			projectsFile = filepath.Join(gwsDir, "projects."+gws.FileExtension)
+			projectsFile = filepath.Join(gwsDir, "projects."+gws2.FileExtension)
 		} else {
-			fmt.Println(renderer.RenderError(fmt.Sprintf("projects.%s already exists. Use --reset to reinitialize", gws.FileExtension)))
+			fmt.Println(renderer.RenderError(fmt.Sprintf("projects.%s already exists. Use --reset to reinitialize", gws2.FileExtension)))
 			return nil
 		}
 	}

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/medialo/gogws/internal/gitignore"
-	"github.com/medialo/gogws/internal/gws"
+	"github.com/medialo/gogws/internal/gws2"
 
 	"github.com/spf13/cobra"
 )
@@ -104,9 +104,9 @@ func runGenerate() error {
 }
 
 func generateWorkspace(dir, pfx, parentPath string, depth int) workspaceInfo {
-	gwsDir := filepath.Join(dir, gws.ConfigDirName)
+	gwsDir := filepath.Join(dir, gws2.ConfigDirName)
 	if err := os.MkdirAll(gwsDir, 0755); err != nil {
-		fmt.Printf("Error creating %s directory: %v\n", gws.ConfigDirName, err)
+		fmt.Printf("Error creating %s directory: %v\n", gws2.ConfigDirName, err)
 		return workspaceInfo{}
 	}
 
@@ -207,7 +207,7 @@ func buildName(pfx, parentPath, suffix string) string {
 }
 
 func writeProjectsFile(gwsDir string, projects []projectInfo) error {
-	filePath := filepath.Join(gwsDir, "projects."+gws.FileExtension)
+	filePath := filepath.Join(gwsDir, gws2.ProjectsFileName)
 	var lines []string
 
 	for _, p := range projects {
@@ -224,7 +224,7 @@ func writeWorkspacesFile(gwsDir string, workspaces []workspaceInfo) error {
 		return nil
 	}
 
-	filePath := filepath.Join(gwsDir, "workspaces."+gws.FileExtension)
+	filePath := filepath.Join(gwsDir, gws2.WorkspacesFileName)
 	var lines []string
 
 	for _, w := range workspaces {

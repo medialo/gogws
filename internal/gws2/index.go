@@ -92,10 +92,6 @@ func (idx *Index) SearchByPath(query string) []Repository {
 	return results
 }
 
-// Rebuild clears the index and re-registers every workspace and project
-// reachable from root. Call it after mutating a tree in a way that bypasses
-// AddProject/AddWorkspace (e.g. appending to Projects/Children directly), so
-// the index reflects the current state again.
 func (idx *Index) Rebuild(root *Workspace) {
 	if idx == nil || root == nil {
 		return

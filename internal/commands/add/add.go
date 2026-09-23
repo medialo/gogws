@@ -1,15 +1,20 @@
 package add
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/medialo/gogws/internal/config"
 
-func NewCommand() *cobra.Command {
+	"github.com/spf13/cobra"
+)
+
+func NewCommand(getConfig func() *config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add repositories to gws file",
 		Long:  `Add a project or workspace repositories to the gws configuration file.`,
 	}
 
-	cmd.AddCommand(newAddProjectCommand())
+	cmd.AddCommand(newAddProjectCommand(getConfig))
+	cmd.AddCommand(newAddWorkspaceCommand(getConfig))
 
 	return cmd
 }

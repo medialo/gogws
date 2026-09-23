@@ -135,14 +135,14 @@ func (w *Workspace) RunDoctorCheckId(id string, autoFix bool) (CheckResult, Doct
 
 // IsValid checks if a workspace is in a valid state without recursively checking children
 func (w *Workspace) IsValid() bool {
-	slog.Debug("Running doctor on workspace", "path", w.Path)
+	slog.Debug("Running doctor on workspace", "path", w.AbsolutePath)
 
 	rulesState := DoctorCheckResults{}
 	for id, rule := range DoctorRules {
 		rulesState[id] = rule.test(w)
 	}
 
-	slog.Debug("Doctor rules completed", "path", w.Path, "rules", rulesState)
+	slog.Debug("Doctor rules completed", "path", w.AbsolutePath, "rules", rulesState)
 
 	for _, state := range rulesState {
 		if state == Failed {

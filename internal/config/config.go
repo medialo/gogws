@@ -5,8 +5,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/medialo/gogws/internal/gws"
-
+	"github.com/medialo/gogws/internal/gws2"
 	"golang.org/x/term"
 )
 
@@ -106,17 +105,17 @@ func ApplyFlags(themeFile string, parallel int, format string, noColor, onlyChan
 
 func load() (*Config, error) {
 	cfg := &Config{
-		Parallel:      gws.DefaultParallel,
+		Parallel:      gws2.DefaultParallel,
 		Format:        "text",
 		IsInteractive: term.IsTerminal(int(os.Stdout.Fd())),
 	}
 
 	// todo is -d use to find root or if -d is present, is considered as root without check
-	wsInfo, err := gws.FindRoot()
+	wsInfo, err := gws2.FindRoot()
 	if err != nil {
 		return nil, err
 	}
-	cfg.WorkspaceRoot = wsInfo.Root
+	cfg.WorkspaceRoot = wsInfo
 
 	return cfg, nil
 }

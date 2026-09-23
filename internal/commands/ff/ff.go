@@ -9,11 +9,11 @@ import (
 
 	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/ui/engineui"
+	"github.com/samber/lo"
 
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/engine"
 	"github.com/medialo/gogws/internal/git"
-	"github.com/medialo/gogws/internal/gws"
 	"github.com/medialo/gogws/internal/hooks"
 	"github.com/medialo/gogws/internal/ui/cli"
 
@@ -35,7 +35,7 @@ func NewCommand(getConfig func() *config.Config) *cobra.Command {
 func runFF(getConfig func() *config.Config) error {
 	cfg := getConfig()
 	if cfg == nil {
-		return fmt.Errorf("no workspace found (no %s file)", gws.ProjectsFileName)
+		return fmt.Errorf("no workspace found (no %s file)", gws2.ProjectsFileName)
 	}
 
 	if err := hooks.PreFF(cfg.WorkspaceRoot); err != nil {
@@ -49,7 +49,10 @@ func runFF(getConfig func() *config.Config) error {
 		return fmt.Errorf("failed to load projects: %w", err)
 	}
 
-	projectList := ws.FlattenProjects()
+	projectList := lo.Filter(ws.FlattenProjects(), func(item *gws2.Project, index int) bool {
+		return item.FolderExist() && item.IsGitRepository()
+	})
+
 	jobs := make([]engine.Job, 0, len(projectList))
 	var skippedJobs []engine.JobResult
 
@@ -57,28 +60,22 @@ func runFF(getConfig func() *config.Config) error {
 	start := time.Now()
 	for _, p := range projectList {
 		jobs = append(jobs, engine.Job{
-			JobNameId: p.Path,
+			JobNameId: p.GetPath(),
 			Fn: func(ctx context.Context, notify engine.Notify) error {
 				notify(engine.EventJobLog, "Checking if project is cloned...")
-				status := git.GetStatus(p.Path)
 
+				status := git.GetStatus(p.GetPath())
 				if !status.Exists {
 					ctx.Done()
 					if status.Error != nil {
 						return status.Error
 					}
-					//skippedJobs = append(skippedJobs, engine.Result{
-					//	Label:      p.Path,
-					//	Success:    false,
-					//	Skipped:    true,
-					//	SkipReason: "not cloned yet",
-					//})
 					return nil
 				}
+
 				notify(engine.EventJobLog, "Fast-forwarding...")
 
-				//slog.Debug("preparing job \"gows ff\"", "project", repoPath, "index", i)
-				return engine.Wrap(git.Pull(p.Path).AsCmd()).Run(ctx, notify)
+				return engine.Wrap(git.Pull(p.GetPath()).AsCmd()).Run(ctx, notify)
 			},
 		})
 	}

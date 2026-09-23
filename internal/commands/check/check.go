@@ -58,10 +58,10 @@ func runCheck(getConfig func() *config.Config) error {
 
 	knownByPath := make(map[string]gws2.Repository, len(ws.Projects)+len(ws.Children))
 	for _, p := range ws.Projects {
-		knownByPath[filepath.Clean(p.Path)] = p
+		knownByPath[filepath.Clean(p.GetPath())] = p
 	}
 	for _, c := range ws.Children {
-		knownByPath[filepath.Clean(c.Path)] = c
+		knownByPath[filepath.Clean(c.GetPath())] = c
 	}
 
 	discovered, err := git.DiscoverRepositories(cfg.WorkspaceRoot, 0)

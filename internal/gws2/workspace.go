@@ -41,7 +41,7 @@ func (gr *GitRepository) Id() int {
 }
 
 func (gr *GitRepository) GetPath() string {
-	return gr.Path
+	return gr.AbsolutePath
 }
 
 func (gr *GitRepository) GetName() string {
@@ -72,7 +72,8 @@ func (gr *GitRepository) setIndex(idx *Index) {
 
 type GitRepository struct {
 	id            int
-	Path          string // Path of the repository from the gws config file, can be ".", use GetPath() to get real path
+	AbsolutePath  string // Absolute filesystem path (rootPath joined with RelativePath); use GetPath() to read it
+	RelativePath  string // Path exactly as written in the gws config file (e.g. "sub/project" or "."), unmodified; written back as-is by formatBaseRepository so save never leaks a machine-specific absolute path
 	Name          string // Name represents the name of the Git repository based on the last part of the path
 	Remotes       []*git.Remote
 	FolderExists  bool
@@ -97,7 +98,7 @@ type Workspace struct {
 func NewRootWorkspace(path string) *Workspace {
 	return &Workspace{
 		id:            -1,
-		Path:          path,
+		AbsolutePath:  path,
 		FolderExists:  true,
 		Name:          filepath.Base(path),
 		gitRepository: git.IsGitFolder(path),
@@ -106,12 +107,74 @@ func NewRootWorkspace(path string) *Workspace {
 	}
 }
 
+// NewProject builds a new git-backed Project rooted at rootPath, for a
+// repository at relativePath exactly as it should appear in
+// .projects.gws. It is not attached to any workspace or index yet; call
+// Workspace.AddProject to attach it, then Workspace.SaveProjects to persist.
+func NewProject(rootPath, relativePath string, remotes []*git.Remote) *Project {
+	absPath := filepath.Join(rootPath, relativePath)
+	_, err := os.Stat(absPath)
+	return &Project{
+		GitRepository: GitRepository{
+			AbsolutePath:  absPath,
+			RelativePath:  relativePath,
+			Name:          filepath.Base(absPath),
+			Remotes:       remotes,
+			Type:          RepositoryTypeProject,
+			gitRepository: true,
+			FolderExists:  err == nil,
+		},
+	}
+}
+
+// NewChildWorkspace builds a new git-backed Workspace rooted at rootPath,
+// for a repository at relativePath exactly as it should appear in
+// .workspaces.gws. It is not attached to any parent workspace or index
+// yet; call Workspace.AddWorkspace to attach it, then
+// Workspace.SaveWorkspace to persist.
+func NewChildWorkspace(rootPath, relativePath string, remote *git.Remote) *Workspace {
+	absPath := filepath.Join(rootPath, relativePath)
+	_, err := os.Stat(absPath)
+	return &Workspace{
+		GitRepository: GitRepository{
+			AbsolutePath:  absPath,
+			RelativePath:  relativePath,
+			Name:          filepath.Base(absPath),
+			Remotes:       []*git.Remote{remote},
+			Type:          RepositoryTypeWorkspace,
+			gitRepository: true,
+			FolderExists:  err == nil,
+		},
+		Projects: []*Project{},
+		Children: []*Workspace{},
+	}
+}
+
+// NewFolderWorkspace builds a new plain-folder Workspace (no git remote,
+// written back with the literal "folder" marker) rooted at rootPath, for
+// relativePath exactly as it should appear in .workspaces.gws.
+func NewFolderWorkspace(rootPath, relativePath string) *Workspace {
+	absPath := filepath.Join(rootPath, relativePath)
+	_, err := os.Stat(absPath)
+	return &Workspace{
+		GitRepository: GitRepository{
+			AbsolutePath: absPath,
+			RelativePath: relativePath,
+			Name:         filepath.Base(absPath),
+			Type:         RepositoryTypeFolder,
+			FolderExists: err == nil,
+		},
+		Projects: []*Project{},
+		Children: []*Workspace{},
+	}
+}
+
 // todo: this is a hack, remove letter
 func (w *Workspace) AddSelfWorkspace() {
 	ws := &Workspace{
 		GitRepository: GitRepository{
 			id:           -1,
-			Path:         "p",
+			AbsolutePath: "p",
 			Remotes:      w.GitRepository.Remotes,
 			FolderExists: false,
 			Name:         "n",
@@ -168,6 +231,63 @@ func (w *Workspace) AddProject(project *Project) {
 	}
 }
 
+// RemoveProject removes the project at path from this workspace or any
+// descendant workspace, and rebuilds the shared index. Returns the
+// workspace the project belonged to (so its own .projects.gws can be
+// re-saved), or nil if no matching project was found anywhere in the tree.
+func (w *Workspace) RemoveProject(path string) *Workspace {
+	owner := w.removeProjectAnywhere(path)
+	if owner != nil {
+		w.ReindexAll()
+	}
+	return owner
+}
+
+func (w *Workspace) removeProjectAnywhere(path string) *Workspace {
+	key := pathKey(path)
+	for i, p := range w.Projects {
+		if pathKey(p.AbsolutePath) == key {
+			w.Projects = append(w.Projects[:i], w.Projects[i+1:]...)
+			return w
+		}
+	}
+	for _, c := range w.Children {
+		if owner := c.removeProjectAnywhere(path); owner != nil {
+			return owner
+		}
+	}
+	return nil
+}
+
+// RemoveWorkspace removes the child workspace at path from this workspace
+// or any descendant workspace, and rebuilds the shared index. Returns the
+// workspace the child belonged to (so its own .workspaces.gws can be
+// re-saved), or nil if no matching workspace was found anywhere in the
+// tree.
+func (w *Workspace) RemoveWorkspace(path string) *Workspace {
+	owner := w.removeWorkspaceAnywhere(path)
+	if owner != nil {
+		w.ReindexAll()
+	}
+	return owner
+}
+
+func (w *Workspace) removeWorkspaceAnywhere(path string) *Workspace {
+	key := pathKey(path)
+	for i, c := range w.Children {
+		if pathKey(c.AbsolutePath) == key {
+			w.Children = append(w.Children[:i], w.Children[i+1:]...)
+			return w
+		}
+	}
+	for _, c := range w.Children {
+		if owner := c.removeWorkspaceAnywhere(path); owner != nil {
+			return owner
+		}
+	}
+	return nil
+}
+
 func (w *Workspace) ReindexAll() {
 	if w.Index() == nil {
 		w.setIndex(NewIndex())
@@ -188,11 +308,15 @@ func (w *Workspace) SaveAll() error {
 }
 
 func (w *Workspace) SaveWorkspace() error {
-	_, workspaceConfigLocation := getWorkspacesConfigFileLocation(w.Path)
+	_, workspaceConfigLocation := getWorkspacesConfigFileLocation(w.AbsolutePath)
 
-	file, err := os.OpenFile(workspaceConfigLocation.Path, os.O_CREATE|os.O_WRONLY, 0644)
+	if err := os.MkdirAll(filepath.Dir(workspaceConfigLocation.Path), 0755); err != nil {
+		return fmt.Errorf("failed to create %s directory: %w", ConfigDirName, err)
+	}
+
+	file, err := os.OpenFile(workspaceConfigLocation.Path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
-		return fmt.Errorf("failed to open projects file: %w", err)
+		return fmt.Errorf("failed to open workspaces file: %w", err)
 	}
 	defer file.Close()
 
@@ -211,9 +335,13 @@ func (w *Workspace) SaveWorkspace() error {
 }
 
 func (w *Workspace) SaveProjects() error {
-	_, projectConfigLocation := getProjectsConfigFileLocation(w.Path)
+	_, projectConfigLocation := getProjectsConfigFileLocation(w.AbsolutePath)
 
-	file, err := os.OpenFile(projectConfigLocation.Path, os.O_CREATE|os.O_WRONLY, 0644)
+	if err := os.MkdirAll(filepath.Dir(projectConfigLocation.Path), 0755); err != nil {
+		return fmt.Errorf("failed to create %s directory: %w", ConfigDirName, err)
+	}
+
+	file, err := os.OpenFile(projectConfigLocation.Path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open projects file: %w", err)
 	}
@@ -234,6 +362,21 @@ func (w *Workspace) SaveProjects() error {
 }
 
 func (gr *GitRepository) formatBaseRepository() string {
+	// RelativePath preserves exactly what was written in the config file.
+	// Entries created programmatically (not parsed from a file) have no
+	// RelativePath yet; fall back to AbsolutePath rather than write nothing.
+	path := gr.RelativePath
+	if path == "" {
+		path = gr.AbsolutePath
+	}
+
+	// A folder workspace has no remote at all; parseWorkspaceLine only
+	// recognizes it back via the literal "folder" marker, so it must be
+	// round-tripped as such rather than as an (empty) remote list.
+	if gr.Type == RepositoryTypeFolder {
+		return fmt.Sprintf("%s | folder", path)
+	}
+
 	var remoteParts []string
 	for _, remote := range gr.Remotes {
 		if remote.Name == "origin" {
@@ -242,7 +385,7 @@ func (gr *GitRepository) formatBaseRepository() string {
 			remoteParts = append(remoteParts, fmt.Sprintf("%s %s", remote.URL, remote.Name))
 		}
 	}
-	return fmt.Sprintf("%s | %s", gr.Path, strings.Join(remoteParts, " | "))
+	return fmt.Sprintf("%s | %s", path, strings.Join(remoteParts, " | "))
 }
 
 func (gr *GitRepository) isGitRepository() bool {
@@ -269,7 +412,7 @@ func (w *Workspace) MissingWorkspaces() []*Workspace {
 		//if child.Type == RepositoryTypeFolder {
 		//	continue
 		//}
-		_, err := os.Stat(child.Path)
+		_, err := os.Stat(child.AbsolutePath)
 		if os.IsNotExist(err) {
 			missings = append(missings, child)
 		}
@@ -280,10 +423,33 @@ func (w *Workspace) MissingWorkspaces() []*Workspace {
 func (w *Workspace) MissingProjects() []*Project {
 	var missings = make([]*Project, 0, len(w.Projects))
 	for _, project := range w.Projects {
-		_, err := os.Stat(project.Path)
+		_, err := os.Stat(project.AbsolutePath)
 		if os.IsNotExist(err) {
 			missings = append(missings, project)
 		}
 	}
 	return missings
+}
+
+// MissingWorkspacesRecursive returns MissingWorkspaces for w plus every
+// descendant workspace already present on disk. A descendant that is
+// itself missing contributes nothing below it yet, since nothing was
+// parsed from its config files; it is picked up once it exists on disk and
+// the tree is reloaded.
+func (w *Workspace) MissingWorkspacesRecursive() []*Workspace {
+	missing := w.MissingWorkspaces()
+	for _, child := range w.Children {
+		missing = append(missing, child.MissingWorkspacesRecursive()...)
+	}
+	return missing
+}
+
+// MissingProjectsRecursive returns MissingProjects for w plus every
+// descendant workspace already present on disk.
+func (w *Workspace) MissingProjectsRecursive() []*Project {
+	missing := w.MissingProjects()
+	for _, child := range w.Children {
+		missing = append(missing, child.MissingProjectsRecursive()...)
+	}
+	return missing
 }
