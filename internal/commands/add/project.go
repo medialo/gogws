@@ -1,80 +1,70 @@
 package add
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/medialo/gogws/internal/gws"
+	"github.com/medialo/gogws/internal/config"
+	"github.com/medialo/gogws/internal/git"
+	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/ui/cli"
 
-	"charm.land/huh/v2"
 	"github.com/spf13/cobra"
 )
 
-var (
-	autoClone bool
-)
+var autoCloneProject bool
 
-func newAddProjectCommand() *cobra.Command {
+func newAddProjectCommand(getConfig func() *config.Config) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "add [git url] [foldername]",
-		Short: "Add project or workpace to the current .gws",
-		Long:  `Add a project or workspace to the current .projects.gws or .workspaces.gws file.`,
+		Use:   "project [git url] [foldername]",
+		Short: "Add a project to the current workspace",
+		Long:  `Add a project to the .projects.gws file, creating it if needed.`,
 		Args:  cobra.MaximumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAddProject(args)
+			return runAddProject(getConfig, args)
 		},
 	}
 
-	cmd.Flags().BoolVar(&autoClone, "auto-clone", false, "Automatically clone the repository after adding it to the workspace")
+	cmd.Flags().BoolVar(&autoCloneProject, "auto-clone", false, "Clone the repository immediately after adding it to the workspace")
 	return cmd
 }
 
-func runAddProject(args []string) error {
-	ws, err := gws.FindRoot()
-
-	if err != nil {
+func runAddProject(getConfig func() *config.Config, args []string) error {
+	cfg := getConfig()
+	if cfg == nil {
 		return fmt.Errorf("no workspace found (no .projects.gws file)")
 	}
 
-	var gitProjectUrl, projectFolderName string
-
-	if len(args) == 2 {
-		gitProjectUrl = args[0]
-		projectFolderName = args[1]
-	} else {
-		huh.NewInput().
-			Title("Git url of project to add").
-			Value(&gitProjectUrl).
-			Run()
-
-		huh.NewInput().
-			Title("Folder name for the project").
-			Value(&projectFolderName).
-			Run()
-	}
-
-	projectToAdd := &gws.Project{
-		Path: projectFolderName,
-		Remotes: []gws.Remote{{
-			Name: "origin",
-			URL:  gitProjectUrl,
-		}},
-	}
-
-	err = gws.AddProject(ws.Root, projectToAdd)
-
+	gitURL, folderName, err := promptRepoDetails(args)
 	if err != nil {
+		return err
+	}
+
+	ws, err := gws2.NewFromPath(cfg.WorkspaceRoot).RunDoctor(false).Recursive(false).Load()
+	if err != nil {
+		return fmt.Errorf("failed to resolve workspace: %w", err)
+	}
+
+	if err := checkNotAlreadyKnown(ws, folderName); err != nil {
+		return err
+	}
+
+	project := gws2.NewProject(cfg.WorkspaceRoot, folderName, []*git.Remote{{Name: "origin", URL: gitURL}})
+
+	ws.AddProject(project)
+	if err := ws.SaveProjects(); err != nil {
 		return fmt.Errorf("failed to add project: %w", err)
 	}
 
-	//todo
-	//if autoClone {
-	//	remotes := git.ToGitRemotesDeprecated(projectToAdd.Remotes)
-	//	err := git.CloneWorkspace(context.Background(), ws.Root, projectToAdd.Path, remotes, nil)
-	//
-	//	if err != nil {
-	//		return fmt.Errorf("failed to clone repository: %w", err)
-	//	}
-	//}
+	renderer := cli.NewRenderer()
+	fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Added project %q -> %s", folderName, gitURL)))
+
+	if autoCloneProject {
+		if err := git.Clone(context.Background(), project.GetOriginRemote(), project.GetPath(), nil); err != nil {
+			return fmt.Errorf("failed to clone repository: %w", err)
+		}
+		fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Cloned %s", folderName)))
+	}
 
 	return nil
 }

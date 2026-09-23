@@ -7,7 +7,7 @@ import (
 	"text/template"
 
 	"github.com/medialo/gogws/internal/config"
-	"github.com/medialo/gogws/internal/gws"
+	"github.com/medialo/gogws/internal/gws2"
 )
 
 type TemplateData struct {
@@ -19,10 +19,10 @@ type TemplateData struct {
 
 func DefaultData() TemplateData {
 	return TemplateData{
-		Extension:      gws.FileExtension,
-		ConfigDir:      gws.ConfigDirName,
-		ProjectsFile:   gws.ProjectsFileName,
-		WorkspacesFile: gws.WorkspacesFileName,
+		Extension:      gws2.FileExtension,
+		ConfigDir:      gws2.ConfigDirName,
+		ProjectsFile:   gws2.ProjectsFileName,
+		WorkspacesFile: gws2.WorkspacesFileName,
 	}
 }
 
@@ -45,7 +45,7 @@ func getCustomTemplatePath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(configDir, gws.TemplatesDirName, "gitignore.tmpl"), nil
+	return filepath.Join(configDir, gws2.TemplatesDirName, "gitignore.tmpl"), nil
 }
 
 func hasCustomTemplate() bool {

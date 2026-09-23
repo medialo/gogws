@@ -39,7 +39,7 @@ func Execute() error {
 	rootCmd.AddCommand(check.NewCommand(root.GetConfig))
 	rootCmd.AddCommand(initcmd.NewCommand(root.GetConfig))
 	rootCmd.AddCommand(update.NewCommand(root.GetConfig))
-	rootCmd.AddCommand(add.NewCommand())
+	rootCmd.AddCommand(add.NewCommand(root.GetConfig))
 	rootCmd.AddCommand(configcmd.NewCommand())
 	rootCmd.AddCommand(dev.NewCommand())
 	rootCmd.AddCommand(doctor.NewDoctorCommand(root.GetConfig))

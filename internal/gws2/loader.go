@@ -97,7 +97,7 @@ func (l *Loader) loadRecursive(wsRootForCurrRecurCall *Workspace, rootPath strin
 			slog.Warn("Failed to read projects", "path", rootPath, "err", err)
 		} else {
 			for _, p := range projectsFromFile {
-				if _, err := os.Stat(p.Path); err == nil {
+				if _, err := os.Stat(p.AbsolutePath); err == nil {
 					p.FolderExists = true
 				} else {
 					p.FolderExists = false
@@ -121,10 +121,10 @@ func (l *Loader) loadRecursive(wsRootForCurrRecurCall *Workspace, rootPath strin
 			slog.Warn("Failed to read workspaces", "path", rootPath, "err", err)
 		} else {
 			for _, childRepository := range workspacesFromFile {
-				if childRepository.Path == "." { // skip current workspace already added
+				if childRepository.AbsolutePath == "." { // skip current workspace already added
 					continue
 				}
-				nextRootPath := childRepository.Path
+				nextRootPath := childRepository.AbsolutePath
 				if _, err := os.Stat(nextRootPath); err == nil {
 					childRepository.FolderExists = true
 

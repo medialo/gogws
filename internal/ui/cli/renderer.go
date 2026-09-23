@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/medialo/gogws/internal/git"
-	"github.com/medialo/gogws/internal/gws"
 	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/theme"
 
@@ -55,13 +54,13 @@ func (r *Renderer) renderWorkspaceEntry(ws *gws2.Workspace) string {
 
 	return fmt.Sprintf("  %s %s %s",
 		icon,
-		r.theme.Path.Render(ws.Path),
+		r.theme.Path.Render(ws.GetPath()),
 		status,
 	)
 }
 
 // to remove or migrate to gws 2
-func (r *Renderer) RenderProjectsList(projects []gws.Project) string {
+func (r *Renderer) RenderProjectsList(projects []*gws2.Project) string {
 	var output strings.Builder
 
 	output.WriteString(r.RenderHeader("Discovered Repositories"))
@@ -70,7 +69,7 @@ func (r *Renderer) RenderProjectsList(projects []gws.Project) string {
 	for _, project := range projects {
 		output.WriteString(fmt.Sprintf("  %s %s\n",
 			r.theme.Success.Render(r.theme.Icons.Success),
-			r.theme.Path.Render(project.Path),
+			r.theme.Path.Render(project.RelativePath),
 		))
 		for _, remote := range project.Remotes {
 			output.WriteString(fmt.Sprintf("      %s: %s\n",

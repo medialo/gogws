@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/medialo/gogws/internal/config"
-	"github.com/medialo/gogws/internal/gws"
+	"github.com/medialo/gogws/internal/gws2"
 )
 
 type HookType string
@@ -58,7 +58,7 @@ func GetTrustMode() TrustMode {
 }
 
 func findHook(hookName HookType, workspaceRoot string) *HookInfo {
-	localHooksDir := filepath.Join(workspaceRoot, gws.ConfigDirName, gws.HooksDirName)
+	localHooksDir := filepath.Join(workspaceRoot, gws2.ConfigDirName, gws2.HooksDirName)
 	localHookPath := filepath.Join(localHooksDir, string(hookName))
 
 	if info, err := os.Stat(localHookPath); err == nil && !info.IsDir() {

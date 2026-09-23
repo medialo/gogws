@@ -145,14 +145,16 @@ func parseProjectLine(rootPath string, line string) (*Project, error) {
 		return &Project{}, fmt.Errorf("invalid format: expected 'path | url [name] [| url2 name2 ...]'")
 	}
 
-	path := filepath.Join(rootPath, strings.TrimSpace(parts[0]))
+	relPath := strings.TrimSpace(parts[0])
+	path := filepath.Join(rootPath, relPath)
 	if path == "" {
 		return &Project{}, fmt.Errorf("empty project path")
 	}
 
 	project := &Project{
 		GitRepository: GitRepository{
-			Path:          path,
+			AbsolutePath:  path,
+			RelativePath:  relPath,
 			Remotes:       make([]*git.Remote, 0),
 			Name:          filepath.Base(path),
 			Type:          RepositoryTypeProject,
@@ -187,7 +189,8 @@ func parseWorkspaceLine(rootPath string, line string) (*Workspace, error) {
 		return nil, fmt.Errorf("invalid format: expected 'path | url [name]'")
 	}
 
-	path := filepath.Join(rootPath, strings.TrimSpace(parts[0]))
+	relPath := strings.TrimSpace(parts[0])
+	path := filepath.Join(rootPath, relPath)
 	if path == "" {
 		return nil, fmt.Errorf("empty workspace path")
 	}
@@ -198,24 +201,24 @@ func parseWorkspaceLine(rootPath string, line string) (*Workspace, error) {
 		return nil, fmt.Errorf("empty remote URL or type for workspace %s", path)
 	}
 
-	var _remote *git.Remote
+	var remotes []*git.Remote
 
 	if "folder" == remotePart {
 		_type = RepositoryTypeFolder
-		_remote = nil
 	} else {
 		_type = RepositoryTypeWorkspace
-		var err error
-		_remote, err = parseRemote(remotePart, 0)
+		remote, err := parseRemote(remotePart, 0)
 		if err != nil {
 			return nil, err
 		}
+		remotes = []*git.Remote{remote}
 	}
 
 	return &Workspace{
 		GitRepository: GitRepository{
-			Path:          path,
-			Remotes:       []*git.Remote{_remote},
+			AbsolutePath:  path,
+			RelativePath:  relPath,
+			Remotes:       remotes,
 			Name:          filepath.Base(path),
 			Type:          _type,
 			FolderExists:  false,
@@ -259,7 +262,7 @@ func filterIgnoredProjects(projects []*Project, patterns []string) []*Project {
 
 	filtered := make([]*Project, 0, len(projects))
 	for _, project := range projects {
-		if !IsPathIgnored(project.Path, patterns) {
+		if !IsPathIgnored(project.AbsolutePath, patterns) {
 			filtered = append(filtered, project)
 		}
 	}

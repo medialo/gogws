@@ -52,10 +52,10 @@ func runFetch(getConfig func() *config.Config) error {
 	var skippedJobs []engine.JobResult
 
 	for _, p := range ws.Projects {
-		repoPath := filepath.Join(cfg.WorkspaceRoot, p.Path)
+		repoPath := filepath.Join(cfg.WorkspaceRoot, p.GetPath())
 
 		jobs = append(jobs, engine.Job{
-			JobNameId: p.Path,
+			JobNameId: p.GetPath(),
 			Fn: func(ctx context.Context, notify engine.Notify) error {
 				notify(engine.EventJobLog, "Checking if project is cloned...")
 				status := git.GetStatus(repoPath)
