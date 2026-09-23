@@ -257,26 +257,34 @@ func filterIgnoredProjects(projects []*Project, patterns []string) []*Project {
 		return projects
 	}
 
-	regexps := make([]*regexp.Regexp, 0, len(patterns))
-	for _, pattern := range patterns {
-		if re, err := regexp.Compile(pattern); err == nil {
-			regexps = append(regexps, re)
-		}
-	}
-
 	filtered := make([]*Project, 0, len(projects))
 	for _, project := range projects {
-		ignored := false
-		for _, re := range regexps {
-			if re.MatchString(project.Path) {
-				ignored = true
-				break
-			}
-		}
-		if !ignored {
+		if !IsPathIgnored(project.Path, patterns) {
 			filtered = append(filtered, project)
 		}
 	}
 
 	return filtered
+}
+
+// LoadIgnorePatterns returns the ignore patterns declared in the workspace's
+// ignore file (see IgnoreFileName), so callers can distinguish paths that
+// were deliberately excluded from paths that are genuinely unknown.
+func LoadIgnorePatterns(rootPath string) ([]string, error) {
+	return parseIgnoreFile(rootPath)
+}
+
+// IsPathIgnored reports whether path matches any of the given ignore patterns.
+// Invalid patterns are skipped, matching the behavior of the ignore file parser.
+func IsPathIgnored(path string, patterns []string) bool {
+	for _, pattern := range patterns {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			continue
+		}
+		if re.MatchString(path) {
+			return true
+		}
+	}
+	return false
 }
