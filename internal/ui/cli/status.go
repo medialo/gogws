@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/view"
 
 	"charm.land/lipgloss/v2/tree"
@@ -19,13 +18,13 @@ func (r *Renderer) RenderStatus(rootWorkspaceStatus, projectRepoStatus, children
 	output.WriteString("\n\n")
 
 	// workspace status
-	str, childrenSummary := r.renderStatusRepositoriesWorkspace(rootWorkspaceStatus, childrenRepoStatus, gws2.RepositoryTypeWorkspace, onlyChanges)
+	str, childrenSummary := r.renderStatusRepositoriesWorkspace(rootWorkspaceStatus, childrenRepoStatus, "Workspace", onlyChanges)
 	output.WriteString(r.theme.MarginLeft.Render(str))
 
 	output.WriteString("\n\n")
 
 	// projects status
-	str, projectSummary := r.renderStatusRepositoriesProject(projectRepoStatus, gws2.RepositoryTypeProject, onlyChanges)
+	str, projectSummary := r.renderStatusRepositoriesProject(projectRepoStatus, "Project", onlyChanges)
 	output.WriteString(r.theme.MarginLeft.Render(str))
 
 	output.WriteString("\n\n")
@@ -40,7 +39,7 @@ func (r *Renderer) RenderStatus(rootWorkspaceStatus, projectRepoStatus, children
 	return output.String()
 }
 
-func (r *Renderer) renderStatusRepositoriesWorkspace(rootWorkspaceStatus, projectRepoStatus []*view.GitRepositoryStatusView, repoType gws2.RepositoryType, onlyChanges bool) (string, *Summary) {
+func (r *Renderer) renderStatusRepositoriesWorkspace(rootWorkspaceStatus, projectRepoStatus []*view.GitRepositoryStatusView, repoType string, onlyChanges bool) (string, *Summary) {
 	if len(projectRepoStatus) == 0 {
 		return "No workspace found in workspace", nil
 	}
@@ -50,7 +49,7 @@ func (r *Renderer) renderStatusRepositoriesWorkspace(rootWorkspaceStatus, projec
 		Total: len(projectRepoStatus),
 	}
 
-	title := repoType.String()
+	title := repoType
 	if len(projectRepoStatus) > 1 {
 		title += "s"
 	}
@@ -92,7 +91,7 @@ func (r *Renderer) renderStatusRepositoriesWorkspace(rootWorkspaceStatus, projec
 	return output.String(), summary
 }
 
-func (r *Renderer) renderStatusRepositoriesProject(projectRepoStatus []*view.GitRepositoryStatusView, repoType gws2.RepositoryType, onlyChanges bool) (string, *Summary) {
+func (r *Renderer) renderStatusRepositoriesProject(projectRepoStatus []*view.GitRepositoryStatusView, repoType string, onlyChanges bool) (string, *Summary) {
 	if len(projectRepoStatus) == 0 {
 		return "No projects found in workspace", nil
 	}
@@ -102,7 +101,7 @@ func (r *Renderer) renderStatusRepositoriesProject(projectRepoStatus []*view.Git
 		Total: len(projectRepoStatus),
 	}
 
-	title := repoType.String()
+	title := repoType
 	if len(projectRepoStatus) > 1 {
 		title += "s"
 	}

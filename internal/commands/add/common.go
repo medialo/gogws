@@ -46,7 +46,14 @@ func promptRepoDetails(args []string) (gitURL, folderName string, err error) {
 func checkNotAlreadyKnown(ws *gws2.Workspace, relativePath string) error {
 	absPath := filepath.Join(ws.AbsolutePath, relativePath)
 	if existing, ok := ws.Index().Get(absPath); ok {
-		return fmt.Errorf("%q is already registered as a %s (%s)", existing.GetName(), existing.GetType(), existing.GetPath())
+		kind := "entry"
+		switch existing.(type) {
+		case *gws2.Project:
+			kind = "project"
+		case *gws2.Workspace:
+			kind = "workspace"
+		}
+		return fmt.Errorf("%q is already registered as a %s (%s)", existing.GetName(), kind, existing.GetPath())
 	}
 	return nil
 }
