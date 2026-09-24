@@ -234,20 +234,6 @@ func NewFolderWorkspace(rootPath, relativePath string) *Workspace {
 	}
 }
 
-// todo: this is a hack, remove letter
-func (w *Workspace) AddSelfWorkspace() {
-	ws := &Workspace{
-		Entry: Entry{
-			id:           -1,
-			AbsolutePath: "p",
-			FolderExists: false,
-			Name:         "n",
-		},
-		Remotes: w.Remotes,
-	}
-	w.AddWorkspace(ws)
-}
-
 func (w *Workspace) FlattenProjects() []*Project {
 	var projects []*Project
 	for _, project := range w.Projects {

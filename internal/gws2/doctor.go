@@ -8,8 +8,7 @@ import (
 
 //go:generate enumer -type=DoctorCheckId
 const (
-	WorkspaceRootMissing DoctorCheckId = iota
-	DuplicateWorkspace
+	DuplicateWorkspace DoctorCheckId = iota
 	DuplicateProject
 )
 
@@ -24,33 +23,19 @@ type DoctorCheck struct {
 }
 
 var DoctorRules = map[DoctorCheckId]DoctorCheck{
-	WorkspaceRootMissing: {
-		Name:        "WorkspaceRootMissing",
-		Description: "Workspace root git url is missing in workspace.gws.",
-		test:        func(w *Workspace) CheckResult { return Fixed },
-		Fix: func(w *Workspace) error {
-			w.AddSelfWorkspace()
-			err := w.SaveAll()
-			if err != nil {
-				return err
-			}
-			return nil
-		},
-		AutoFix: true,
-	},
 	DuplicateWorkspace: {
 		Name:        "DuplicateWorkspace",
 		Description: "Duplicate workspace",
 		test:        func(w *Workspace) CheckResult { return hasDuplicate(w.Children) },
-		Fix:         nil,
-		AutoFix:     false,
+		Fix:         fixDuplicateWorkspaces,
+		AutoFix:     true,
 	},
 	DuplicateProject: {
 		Name:        "DuplicateProject",
 		Description: "Duplicate project",
 		test:        func(w *Workspace) CheckResult { return hasDuplicate(w.Projects) },
-		Fix:         nil,
-		AutoFix:     false,
+		Fix:         fixDuplicateProjects,
+		AutoFix:     true,
 	},
 }
 
@@ -124,13 +109,44 @@ func (w *Workspace) RunDoctorCheckId(id string, autoFix bool) (CheckResult, Doct
 	checkResult := check.test(w)
 
 	if checkResult == Failed && autoFix && check.Fix != nil {
-		err := check.Fix(w)
-		if err != nil {
-			return Passed, *checkId, err
+		if err := check.Fix(w); err != nil {
+			return Failed, *checkId, err
 		}
+		checkResult = Fixed
 	}
 
 	return checkResult, *checkId, nil
+}
+
+// WorkspaceDoctorResult pairs one workspace node with the outcome of the
+// checks run on it, so a recursive run can report exactly which nested
+// workspace has the issue.
+type WorkspaceDoctorResult struct {
+	Workspace *Workspace
+	Results   DoctorCheckResults
+}
+
+// RunAllDoctorChecksRecursive runs every registered check on w and every
+// descendant workspace already loaded in the tree.
+func (w *Workspace) RunAllDoctorChecksRecursive(autoFix bool) ([]WorkspaceDoctorResult, error) {
+	return w.RunDoctorChecksRecursive(DoctorCheckIdStrings(), autoFix)
+}
+
+// RunDoctorChecksRecursive runs checkIds on w and every descendant
+// workspace already loaded in the tree, since a duplicate project or
+// workspace can occur just as well inside a nested workspace as at the
+// root.
+func (w *Workspace) RunDoctorChecksRecursive(checkIds []string, autoFix bool) ([]WorkspaceDoctorResult, error) {
+	nodes := append([]*Workspace{w}, w.FlattenWorkspaces()...)
+	results := make([]WorkspaceDoctorResult, 0, len(nodes))
+	for _, node := range nodes {
+		r, err := node.RunDoctorChecks(checkIds, autoFix)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, WorkspaceDoctorResult{Workspace: node, Results: r})
+	}
+	return results, nil
 }
 
 // IsValid checks if a workspace is in a valid state without recursively checking children
@@ -152,17 +168,58 @@ func (w *Workspace) IsValid() bool {
 	return true
 }
 
-func workspaceRootMissing(workspaces []*Workspace) bool {
-	return false
-}
-
 func hasDuplicate[T Repository](repositories []T) CheckResult {
 	seen := make(map[string]struct{}, len(repositories))
 	for _, r := range repositories {
-		if _, exists := seen[r.GetPath()]; exists {
+		key := pathKey(r.GetPath())
+		if _, exists := seen[key]; exists {
 			return Failed
 		}
-		seen[r.GetPath()] = struct{}{}
+		seen[key] = struct{}{}
 	}
 	return Passed
+}
+
+// fixDuplicateWorkspaces drops every child workspace whose path repeats an
+// earlier one, keeping the first occurrence (i.e. the earliest line in
+// .workspaces.gws), then persists the deduplicated list.
+//
+// Deliberately does not call w.ReindexAll(): w here is whichever node the
+// check ran on (root or a nested workspace, from RunDoctorChecksRecursive),
+// and Index.Rebuild always rebuilds from the tree's actual root — calling
+// it with a nested w would wipe the shared index down to just that
+// subtree. The on-disk file is the source of truth for the next run, and
+// nothing later in this process depends on the in-memory index.
+func fixDuplicateWorkspaces(w *Workspace) error {
+	seen := make(map[string]struct{}, len(w.Children))
+	deduped := w.Children[:0]
+	for _, c := range w.Children {
+		key := pathKey(c.AbsolutePath)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		deduped = append(deduped, c)
+	}
+	w.Children = deduped
+	return w.SaveWorkspace()
+}
+
+// fixDuplicateProjects drops every project whose path repeats an earlier
+// one, keeping the first occurrence (i.e. the earliest line in
+// .projects.gws), then persists the deduplicated list. See
+// fixDuplicateWorkspaces for why this doesn't reindex.
+func fixDuplicateProjects(w *Workspace) error {
+	seen := make(map[string]struct{}, len(w.Projects))
+	deduped := w.Projects[:0]
+	for _, p := range w.Projects {
+		key := pathKey(p.AbsolutePath)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		deduped = append(deduped, p)
+	}
+	w.Projects = deduped
+	return w.SaveProjects()
 }

@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _DoctorCheckIdName = "WorkspaceRootMissingDuplicateWorkspaceDuplicateProject"
+const _DoctorCheckIdName = "DuplicateWorkspaceDuplicateProject"
 
-var _DoctorCheckIdIndex = [...]uint8{0, 20, 38, 54}
+var _DoctorCheckIdIndex = [...]uint8{0, 18, 34}
 
-const _DoctorCheckIdLowerName = "workspacerootmissingduplicateworkspaceduplicateproject"
+const _DoctorCheckIdLowerName = "duplicateworkspaceduplicateproject"
 
 func (i DoctorCheckId) String() string {
 	if i < 0 || i >= DoctorCheckId(len(_DoctorCheckIdIndex)-1) {
@@ -24,26 +24,22 @@ func (i DoctorCheckId) String() string {
 // Re-run the stringer command to generate them again.
 func _DoctorCheckIdNoOp() {
 	var x [1]struct{}
-	_ = x[WorkspaceRootMissing-(0)]
-	_ = x[DuplicateWorkspace-(1)]
-	_ = x[DuplicateProject-(2)]
+	_ = x[DuplicateWorkspace-(0)]
+	_ = x[DuplicateProject-(1)]
 }
 
-var _DoctorCheckIdValues = []DoctorCheckId{WorkspaceRootMissing, DuplicateWorkspace, DuplicateProject}
+var _DoctorCheckIdValues = []DoctorCheckId{DuplicateWorkspace, DuplicateProject}
 
 var _DoctorCheckIdNameToValueMap = map[string]DoctorCheckId{
-	_DoctorCheckIdName[0:20]:       WorkspaceRootMissing,
-	_DoctorCheckIdLowerName[0:20]:  WorkspaceRootMissing,
-	_DoctorCheckIdName[20:38]:      DuplicateWorkspace,
-	_DoctorCheckIdLowerName[20:38]: DuplicateWorkspace,
-	_DoctorCheckIdName[38:54]:      DuplicateProject,
-	_DoctorCheckIdLowerName[38:54]: DuplicateProject,
+	_DoctorCheckIdName[0:18]:       DuplicateWorkspace,
+	_DoctorCheckIdLowerName[0:18]:  DuplicateWorkspace,
+	_DoctorCheckIdName[18:34]:      DuplicateProject,
+	_DoctorCheckIdLowerName[18:34]: DuplicateProject,
 }
 
 var _DoctorCheckIdNames = []string{
-	_DoctorCheckIdName[0:20],
-	_DoctorCheckIdName[20:38],
-	_DoctorCheckIdName[38:54],
+	_DoctorCheckIdName[0:18],
+	_DoctorCheckIdName[18:34],
 }
 
 // DoctorCheckIdString retrieves an enum value from the enum constants string name.
