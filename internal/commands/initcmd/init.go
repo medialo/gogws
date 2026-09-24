@@ -44,6 +44,7 @@ Running 'gogws init' without subcommand is equivalent to 'gogws init projects'.`
 
 	cmd.AddCommand(newProjectsCommand(getConfig))
 	cmd.AddCommand(newWorkspacesCommand(getConfig))
+	cmd.AddCommand(newProviderCommand(getConfig))
 	cmd.AddCommand(newGitignoreCommand())
 
 	return cmd
@@ -96,6 +97,10 @@ func persistentPreInitCommand(getConfig func() *config.Config) error {
 	if resetProjectsGwsFile {
 		slog.Debug("Resetting projects.gws file if it exists")
 		cfg := getConfig()
+		if cfg == nil {
+			// No workspace found yet — nothing to reset.
+			return nil
+		}
 
 		gwsDir := filepath.Join(cfg.WorkspaceRoot, gws2.ConfigDirName)
 		if err := os.MkdirAll(gwsDir, 0755); err != nil {
@@ -133,6 +138,11 @@ func persistentPostInitCommand(getConfig func() *config.Config) error {
 	slog.Debug("Running PersistentPostRunE", "command", "init")
 	if !ignoreGitIgnoreGeneration {
 		cfg := getConfig()
+		if cfg == nil {
+			// getConfig() reflects the workspace state at process startup,
+			// before RunE created anything — nothing resolvable yet, skip.
+			return nil
+		}
 		if err := gitignore.EnsureGWSSection(cfg.WorkspaceRoot); err != nil {
 			fmt.Println(renderer.RenderWarning(fmt.Sprintf("Failed to generate .gitignore: %v", err)))
 		} else {

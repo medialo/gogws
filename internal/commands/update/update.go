@@ -6,12 +6,14 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/engine"
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/hooks"
+	"github.com/medialo/gogws/internal/providers"
 	"github.com/medialo/gogws/internal/ui/cli"
 	engineui "github.com/medialo/gogws/internal/ui/engineui"
 
@@ -19,10 +21,13 @@ import (
 )
 
 var (
-	skipProjects   bool
-	skipWorkspaces bool
-	recursive      bool
-	prune          bool
+	skipProjects          bool
+	skipWorkspaces        bool
+	recursive             bool
+	prune                 bool
+	noProviderDiscovery   bool
+	refreshProviders      bool
+	forceRefreshProviders bool
 )
 
 func NewCommand(getConfig func() *config.Config) *cobra.Command {
@@ -35,7 +40,15 @@ in .workspaces.gws that are not yet present in the workspace.
 Use --skip-projects to only clone workspaces (recursive).
 Use --skip-workspaces to only clone projects.
 Use --prune to remove projects and workspaces from the .gws files when
-their repository can no longer be found (e.g. deleted or renamed upstream).`,
+their repository can no longer be found (e.g. deleted or renamed upstream).
+
+A workspace remote of "github:<org>" or "gitlab:<group>" (or a full URL
+after the prefix, for self-hosted instances) is auto-discovered via that
+provider's API instead of git-cloned: its repos and subgroups are written
+to .projects.gws/.workspaces.gws, then picked up like any other entry.
+Use --refresh-providers to re-query already-discovered ones (throttled by
+the provider-cache-ttl user setting), --force-refresh-providers to ignore
+that TTL, or --no-provider-discovery to disable discovery entirely.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUpdate(getConfig)
 		},
@@ -45,6 +58,9 @@ their repository can no longer be found (e.g. deleted or renamed upstream).`,
 	cmd.Flags().BoolVar(&skipWorkspaces, "skip-workspaces", false, "skip cloning workspaces, only clone projects")
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "Set update to recursive mode (clone all workspaces and sub-projects)")
 	cmd.Flags().BoolVar(&prune, "prune", false, "Remove projects and workspaces from the .gws files when their repository cannot be found")
+	cmd.Flags().BoolVar(&noProviderDiscovery, "no-provider-discovery", false, "Disable auto-discovery of github:/gitlab: organization/group remotes; treat them as plain (failing) git remotes")
+	cmd.Flags().BoolVar(&refreshProviders, "refresh-providers", false, "Re-query already-discovered provider organizations/groups whose cache has expired")
+	cmd.Flags().BoolVar(&forceRefreshProviders, "force-refresh-providers", false, "Re-query all already-discovered provider organizations/groups, ignoring the cache TTL (implies --refresh-providers)")
 
 	return cmd
 }
@@ -158,6 +174,15 @@ func runUpdate(getConfig func() *config.Config) error {
 		fmt.Println(renderer.RenderWarning(fmt.Sprintf("Removed %d unreachable entries from the workspace: %s", len(prunedRepos), strings.Join(prunedRepos, ", "))))
 	}
 
+	if !noProviderDiscovery && (refreshProviders || forceRefreshProviders) {
+		ws, err := gws2.NewFromPath(cfg.WorkspaceRoot).Load()
+		if err != nil {
+			return fmt.Errorf("failed to resolve workspace: %w", err)
+		}
+		refreshed := refreshProviderWorkspaces(renderer, ws, forceRefreshProviders, cfg.Parallel, cfg.StopOnError, cfg.IsInteractive)
+		clonedProjects = append(clonedProjects, refreshed...)
+	}
+
 	if err := hooks.PostUpdate(cfg.WorkspaceRoot, clonedProjects); err != nil {
 		return fmt.Errorf("post-update hook failed: %w", err)
 	}
@@ -174,7 +199,7 @@ func pruneNotFound(renderer *cli.Renderer, result *engine.ExecutionResult, remov
 	var owners []*gws2.Workspace
 	seen := map[*gws2.Workspace]bool{}
 	for _, r := range result.Failed() {
-		if !git.IsNotFoundError(r.Error) {
+		if !git.IsNotFoundError(r.Error) && !providers.IsNotFoundError(r.Error) {
 			continue
 		}
 		owner := remove(r.JobId)
@@ -191,6 +216,63 @@ func pruneNotFound(renderer *cli.Renderer, result *engine.ExecutionResult, remov
 	return removed, owners
 }
 
+// discoverAndMaterialize resolves a workspace's github:/gitlab: remote via
+// its provider's API and writes the resulting repos/subgroups into
+// child's own .projects.gws/.workspaces.gws, in place of a git clone.
+func discoverAndMaterialize(ctx context.Context, provider providers.Provider, child *gws2.Workspace, url string) error {
+	group, err := provider.Discover(ctx, url, providers.MaxDiscoverDepth)
+	if err != nil {
+		return err
+	}
+	return providers.Materialize(child, provider, group)
+}
+
+// providerCacheTTL resolves the user-configured provider-cache-ttl,
+// falling back to config.DefaultProviderCacheTTL if unset or unparsable.
+func providerCacheTTL() time.Duration {
+	resolved, err := config.LoadUserConfigResolved()
+	ttlStr := config.DefaultProviderCacheTTL
+	if err == nil && resolved.ProviderCacheTTL.Value != "" {
+		ttlStr = resolved.ProviderCacheTTL.Value
+	}
+	ttl, err := time.ParseDuration(ttlStr)
+	if err != nil {
+		ttl, _ = time.ParseDuration(config.DefaultProviderCacheTTL)
+	}
+	return ttl
+}
+
+// refreshProviderWorkspaces re-queries already-materialized provider
+// workspaces in ws whose cache has expired (or all of them, if force),
+// via the same job/engine machinery cloneWorkspaces uses. Returns the
+// paths that were actually refreshed.
+func refreshProviderWorkspaces(renderer *cli.Renderer, ws *gws2.Workspace, force bool, parallel int, stopOnError bool, isInteractive bool) []string {
+	stale := providers.StaleWorkspaces(ws, providerCacheTTL(), force)
+	if len(stale) == 0 {
+		return nil
+	}
+
+	fmt.Println(renderer.RenderInfo(fmt.Sprintf("Refreshing %d provider workspace(s)...", len(stale))))
+
+	jobs := make([]engine.Job, 0, len(stale))
+	for _, child := range stale {
+		jobs = append(jobs, engine.Job{
+			JobNameId: child.GetPath(),
+			Fn: func(ctx context.Context, notify engine.Notify) error {
+				remote := child.GetOriginRemote()
+				provider := providers.Find(remote.URL)
+				return discoverAndMaterialize(ctx, provider, child, remote.URL)
+			},
+		})
+	}
+
+	result := runJobs(jobs, parallel, stopOnError, isInteractive)
+	if !isInteractive {
+		renderSummary(renderer, result, "Refreshed provider workspaces")
+	}
+	return result.SuccessLabels()
+}
+
 // todo check if engine bien placé
 func cloneWorkspaces(workspaceRoot string, toClone []*gws2.Workspace, parallel int, stopOnError bool, isInteractive bool) *engine.ExecutionResult {
 	if len(toClone) == 0 {
@@ -204,6 +286,13 @@ func cloneWorkspaces(workspaceRoot string, toClone []*gws2.Workspace, parallel i
 		jobs = append(jobs, engine.Job{
 			JobNameId: child.GetPath(),
 			Fn: func(ctx context.Context, notify engine.Notify) error {
+				if !noProviderDiscovery {
+					if remote := child.GetOriginRemote(); remote != nil {
+						if provider := providers.Find(remote.URL); provider != nil {
+							return discoverAndMaterialize(ctx, provider, child, remote.URL)
+						}
+					}
+				}
 				if child.IsGitRepository() {
 					return git.CloneWorkspace(ctx, child.GetOriginRemote(), child.GetPath(), engine.WrapRunner(notify))
 				}
