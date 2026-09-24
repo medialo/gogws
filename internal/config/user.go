@@ -27,11 +27,16 @@ type ConfigValue[T any] struct {
 
 type UserConfig struct {
 	TrustedWorkspaces []string `yaml:"trusted-workspaces,omitempty"`
+	ProviderCacheTTL  string   `yaml:"provider-cache-ttl,omitempty"`
 }
 
 type UserConfigResolved struct {
 	TrustedWorkspaces ConfigValue[[]string]
+	ProviderCacheTTL  ConfigValue[string]
 }
+
+// DefaultProviderCacheTTL is used whenever provider-cache-ttl is unset.
+const DefaultProviderCacheTTL = "24h"
 
 func GetUserConfigPath() (string, error) {
 	homeDir, err := os.UserHomeDir()
@@ -52,6 +57,7 @@ func GetUserConfigDir() (string, error) {
 func LoadUserConfigResolved() (*UserConfigResolved, error) {
 	resolved := &UserConfigResolved{
 		TrustedWorkspaces: ConfigValue[[]string]{Value: []string{}, Source: SourceDefault},
+		ProviderCacheTTL:  ConfigValue[string]{Value: DefaultProviderCacheTTL, Source: SourceDefault},
 	}
 
 	configPath, err := GetUserConfigPath()
@@ -66,6 +72,9 @@ func LoadUserConfigResolved() (*UserConfigResolved, error) {
 			if fileCfg.TrustedWorkspaces != nil {
 				resolved.TrustedWorkspaces = ConfigValue[[]string]{Value: fileCfg.TrustedWorkspaces, Source: SourceFile}
 			}
+			if fileCfg.ProviderCacheTTL != "" {
+				resolved.ProviderCacheTTL = ConfigValue[string]{Value: fileCfg.ProviderCacheTTL, Source: SourceFile}
+			}
 		}
 	}
 
@@ -77,9 +86,18 @@ func LoadUserConfig() (*UserConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &UserConfig{
+	cfg := &UserConfig{
 		TrustedWorkspaces: resolved.TrustedWorkspaces.Value,
-	}, nil
+	}
+	// Only carry the TTL over if it actually came from the file: unlike
+	// TrustedWorkspaces' empty-slice default (naturally omitted by
+	// omitempty), the TTL default is a non-empty string, so resolving it
+	// here would round-trip the default into the saved file on any
+	// unrelated SetUserConfigValue/AddTrustedWorkspace call.
+	if resolved.ProviderCacheTTL.Source == SourceFile {
+		cfg.ProviderCacheTTL = resolved.ProviderCacheTTL.Value
+	}
+	return cfg, nil
 }
 
 func SaveUserConfig(cfg *UserConfig) error {
@@ -116,6 +134,10 @@ func SetUserConfigValue(key string, value interface{}) error {
 		if v, ok := value.([]string); ok {
 			cfg.TrustedWorkspaces = v
 		}
+	case "provider-cache-ttl":
+		if v, ok := value.(string); ok {
+			cfg.ProviderCacheTTL = v
+		}
 	}
 
 	return SaveUserConfig(cfg)
@@ -146,22 +168,39 @@ func GetUserConfigValue(key string) (interface{}, error) {
 	switch key {
 	case "trusted-workspaces":
 		return cfg.TrustedWorkspaces, nil
+	case "provider-cache-ttl":
+		return cfg.ProviderCacheTTL, nil
 	default:
 		return nil, nil
 	}
 }
 
 func GetAvailableConfigKeys() []string {
-	return []string{"trusted-workspaces"}
+	return []string{"trusted-workspaces", "provider-cache-ttl"}
 }
 
 func GetEnvVarName(key string) string {
 	switch key {
-	case "trusted-workspaces":
-		return ""
+	case "github-token":
+		return "GITHUB_TOKEN"
+	case "gitlab-token":
+		return "GITLAB_TOKEN"
 	default:
 		return ""
 	}
+}
+
+// GetProviderToken returns the API token for the given provider name
+// ("github", "gitlab"), read from its conventional environment variable
+// (matching the gh/glab CLI tools). Tokens are never persisted to
+// UserConfig/~/.gws/config.yaml — env var only. Returns "" if unset,
+// which callers treat as "make unauthenticated requests".
+func GetProviderToken(provider string) string {
+	envVar := GetEnvVarName(provider + "-token")
+	if envVar == "" {
+		return ""
+	}
+	return os.Getenv(envVar)
 }
 
 func GetUserHooksDir() (string, error) {

@@ -50,6 +50,10 @@ By default, also generates a .gitignore file configured for GWS workspaces.`,
 func preRunInitProjects(getConfig func() *config.Config) error {
 	if resetProjectsGwsFile {
 		cfg := getConfig()
+		if cfg == nil {
+			// No workspace found yet — nothing to reset.
+			return nil
+		}
 		slog.Debug("Resetting .projects.gws config", "resetProjectsGwsFile", resetProjectsGwsFile)
 		fileLocation, err := gws2.DeleteProjectsFile(cfg.WorkspaceRoot)
 

@@ -46,6 +46,10 @@ Creates a .gws/workspaces.gws file with the configured workspaces.`,
 func preRunInitWorkspaces(getConfig func() *config.Config) error {
 	if resetWorkspacesGwsFile {
 		cfg := getConfig()
+		if cfg == nil {
+			// No workspace found yet — nothing to reset.
+			return nil
+		}
 		slog.Debug("Resetting workspaces.gws file", "resetWorkspacesGwsFile", resetWorkspacesGwsFile)
 		fileLocation, err := gws2.DeleteWorkspacesFile(cfg.WorkspaceRoot)
 
