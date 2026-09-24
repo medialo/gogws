@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/medialo/gogws/internal/gws2"
@@ -10,9 +11,7 @@ import (
 	"charm.land/lipgloss/v2/table"
 )
 
-// RenderSearchResults renders every match for query, one row per result,
-// labeling each as a project or workspace.
-func (r *Renderer) RenderSearchResults(query string, matches []gws2.Repository) string {
+func (r *Renderer) RenderSearchResults(query string, matches []gws2.Repository, fullPath bool) string {
 	var output strings.Builder
 
 	output.WriteString(r.RenderHeader(fmt.Sprintf("GOGWS - Search - %q", query)))
@@ -31,11 +30,38 @@ func (r *Renderer) RenderSearchResults(query string, matches []gws2.Repository) 
 			icon = r.theme.Success.Render(r.theme.Icons.Workspace)
 			kind = "workspace"
 		}
-		t.Row(icon, kind, m.GetName(), r.theme.Path.Render(m.GetPath()))
+		t.Row(icon, kind, m.GetName(), r.RenderMatchedPath(m.GetPath(), query, fullPath))
 	}
 	output.WriteString(t.String())
 	output.WriteString("\n")
 	output.WriteString(r.RenderInfo(fmt.Sprintf("%d match(es)", len(matches))))
 
 	return output.String()
+}
+
+// RenderMatchedPath renders path with the substring that matched query
+// highlighted, styled the same way as the search results table's Path
+// column — used there and wherever else a match needs to be shown inline
+// (e.g. the --cd disambiguation prompt).
+func (r *Renderer) RenderMatchedPath(path, query string, fullPath bool) string {
+	if query == "" {
+		return r.theme.Path.Render(path)
+	}
+
+	if fullPath {
+		return r.highlightSubstring(path, query)
+	}
+
+	dir, base := filepath.Split(path)
+	return r.theme.Path.Render(dir) + r.highlightSubstring(base, query)
+}
+
+func (r *Renderer) highlightSubstring(s, query string) string {
+	idx := strings.Index(strings.ToLower(s), strings.ToLower(query))
+	if idx == -1 {
+		return r.theme.Path.Render(s)
+	}
+
+	before, matched, after := s[:idx], s[idx:idx+len(query)], s[idx+len(query):]
+	return r.theme.Path.Render(before) + r.theme.Match.Render(matched) + r.theme.Path.Render(after)
 }

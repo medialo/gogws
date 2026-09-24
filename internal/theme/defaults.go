@@ -18,6 +18,7 @@ type Theme struct {
 	Info      lipgloss.Style
 	Subtle    lipgloss.Style
 	Path      lipgloss.Style
+	Match     lipgloss.Style
 	Branch    lipgloss.Style
 	Remote    lipgloss.Style
 	Status    lipgloss.Style
@@ -64,6 +65,7 @@ var DefaultTheme = Theme{
 	Info:      lipgloss.NewStyle().Foreground(lipgloss.Color("39")),
 	Subtle:    lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
 	Path:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("75")),
+	Match:     lipgloss.NewStyle().Bold(true).Underline(true).Foreground(lipgloss.Color("214")),
 	Branch:    lipgloss.NewStyle().Foreground(lipgloss.Color("213")),
 	Remote:    lipgloss.NewStyle().Foreground(lipgloss.Color("220")),
 	Status:    lipgloss.NewStyle().Foreground(lipgloss.Color("42")),

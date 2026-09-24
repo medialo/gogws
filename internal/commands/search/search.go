@@ -2,12 +2,12 @@ package search
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/ui/cli"
 
+	"charm.land/huh/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -39,10 +39,6 @@ stdout instead of a table, for a shell "smart cd" alias, e.g.:
 
 	cmd.Flags().BoolVar(&searchFullPath, "full-path", false, "match against the full path instead of just the name")
 	cmd.Flags().BoolVar(&searchGoToPath, "cd", false, "print the absolute path to stdout when there is exactly one match")
-	// pflag has no native long-name alias for a flag, only command aliases;
-	// binding a second flag to the same variable is the standard way to
-	// get --go to behave identically to --cd.
-	cmd.Flags().BoolVar(&searchGoToPath, "go", false, "alias for --cd")
 
 	return cmd
 }
@@ -65,22 +61,17 @@ func runSearch(getConfig func() *config.Config, query string) error {
 		matches = ws.Index().SearchByName(query)
 	}
 
+	renderer := cli.NewRenderer()
+
 	if searchGoToPath {
-		return runSearchGoTo(matches, query)
+		return runSearchGoTo(renderer, matches, query, searchFullPath)
 	}
 
-	renderer := cli.NewRenderer()
-	fmt.Println(renderer.RenderSearchResults(query, matches))
+	fmt.Println(renderer.RenderSearchResults(query, matches, searchFullPath))
 	return nil
 }
 
-// runSearchGoTo implements the --cd/--go contract: stdout carries exactly
-// the matched path and nothing else on success, and stays empty on
-// failure (zero or multiple matches), so a shell function can safely do
-// `path=$(gogws search --cd "$1") || return 1; cd "$path"`. It never goes
-// through cli.Renderer, which always applies color/styling — there is no
-// undecorated output mode there, so this path is a deliberate bypass.
-func runSearchGoTo(matches []gws2.Repository, query string) error {
+func runSearchGoTo(renderer *cli.Renderer, matches []gws2.Repository, query string, fullPath bool) error {
 	switch len(matches) {
 	case 0:
 		return fmt.Errorf("no match for %q", query)
@@ -88,10 +79,38 @@ func runSearchGoTo(matches []gws2.Repository, query string) error {
 		fmt.Println(matches[0].GetPath())
 		return nil
 	default:
-		fmt.Fprintf(os.Stderr, "multiple matches for %q, refine your query:\n", query)
-		for _, m := range matches {
-			fmt.Fprintf(os.Stderr, "  %s\n", m.GetPath())
+		selected, err := promptMatchSelection(renderer, matches, query, fullPath)
+		if err != nil {
+			return err
 		}
-		return fmt.Errorf("%d matches for %q, expected exactly one", len(matches), query)
+		fmt.Println(selected.GetPath())
+		return nil
 	}
+}
+
+// promptMatchSelection lets the user pick one of several ambiguous matches
+// via an interactive huh select. The form renders to stderr (huh's
+// default), so stdout stays reserved for the chosen path — preserving the
+// --cd/--go contract for `$(gogws search --cd "$1")`.
+func promptMatchSelection(renderer *cli.Renderer, matches []gws2.Repository, query string, fullPath bool) (gws2.Repository, error) {
+	opts := make([]huh.Option[gws2.Repository], 0, len(matches))
+	for _, m := range matches {
+		label := fmt.Sprintf("%s  %s", m.GetName(), renderer.RenderMatchedPath(m.GetPath(), query, fullPath))
+		opts = append(opts, huh.NewOption(label, m))
+	}
+
+	var selected gws2.Repository
+	err := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[gws2.Repository]().
+				Title(fmt.Sprintf("Multiple matches for %q — pick one", query)).
+				Options(opts...).
+				Value(&selected),
+		),
+	).Run()
+	if err != nil {
+		return nil, err
+	}
+
+	return selected, nil
 }
