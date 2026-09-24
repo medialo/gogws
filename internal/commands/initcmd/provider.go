@@ -17,14 +17,17 @@ import (
 
 func newProviderCommand(getConfig func() *config.Config) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "provider [github:org|gitlab:group]",
+		Use:   "provider [github:org|gitlab:group|gitlab-graphql:group]",
 		Short: "Initialize a workspace from a git provider organization/group",
 		Long: `Discover a git provider organization or group's repositories (and, for
 GitLab, its subgroups) and create .gws/.projects.gws and
 .gws/.workspaces.gws mirroring its structure.
 
-Accepts a "github:<org>" or "gitlab:<group>" reference (or a full URL
-after the prefix, for self-hosted instances).
+Accepts a "github:<org>", "gitlab:<group>" or "gitlab-graphql:<group>"
+reference (or a full URL after the prefix, for self-hosted instances).
+"gitlab-graphql" discovers the same GitLab structure as "gitlab" but via
+GitLab's GraphQL API, which fetches deeply-nested subgroups in far fewer
+requests — prefer it over "gitlab" for groups with many subgroups.
 
 Run 'gogws update --recursive' afterward to actually clone everything.`,
 		Args: cobra.ExactArgs(1),
@@ -47,7 +50,7 @@ func runInitProvider(url string) error {
 
 	provider := providers.Find(url)
 	if provider == nil {
-		return fmt.Errorf("%q is not a recognized provider reference (expected a \"github:\" or \"gitlab:\" prefix)", url)
+		return fmt.Errorf("%q is not a recognized provider reference (expected a \"github:\", \"gitlab:\" or \"gitlab-graphql:\" prefix)", url)
 	}
 
 	renderer := cli.NewRenderer()

@@ -1,9 +1,11 @@
 // Package providers discovers a git provider organization/group's repos
-// and subgroups via that provider's REST API, so gogws can auto-generate
-// the .projects.gws/.workspaces.gws files that mirror its structure. Each
-// provider lives in its own file (github.go, gitlab.go) implementing the
-// small Provider interface; provider.go holds the shared types and the
-// HTTP helper they both use.
+// and subgroups via that provider's API (REST or GraphQL), so gogws can
+// auto-generate the .projects.gws/.workspaces.gws files that mirror its
+// structure. Each provider lives in its own file (github.go, gitlab.go,
+// gitlab_graphql.go) implementing the small Provider interface;
+// provider.go holds the shared types and the REST getJSON helper (the
+// GraphQL provider has its own postGraphQL helper — the two APIs paginate
+// too differently to share one).
 package providers
 
 import (
@@ -67,7 +69,7 @@ const (
 	MaxReposPerDiscover = 500
 )
 
-var registry = []Provider{&GitHubProvider{}, &GitLabProvider{}}
+var registry = []Provider{&GitHubProvider{}, &GitLabProvider{}, &GitLabGraphQLProvider{}}
 
 // Find returns the first registered Provider whose Match(rawURL) is true,
 // or nil if none match.

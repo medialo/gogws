@@ -26,11 +26,57 @@ func TestGitLabProvider_Match(t *testing.T) {
 		"gitlab:https://gitlab.com/mon-groupe": true,
 		"github:mon-org":                       false,
 		"https://gitlab.com/user/repo.git":     false,
+		"gitlab-graphql:mon-groupe":            false,
 		"":                                     false,
 	}
 	for url, want := range cases {
 		if got := p.Match(url); got != want {
 			t.Errorf("Match(%q) = %v, want %v", url, got, want)
+		}
+	}
+}
+
+func TestGitLabGraphQLProvider_Match(t *testing.T) {
+	p := &GitLabGraphQLProvider{}
+	cases := map[string]bool{
+		"gitlab-graphql:mon-groupe":                    true,
+		"gitlab-graphql:https://gitlab.com/mon-groupe": true,
+		"gitlab:mon-groupe":                            false,
+		"github:mon-org":                               false,
+		"":                                             false,
+	}
+	for url, want := range cases {
+		if got := p.Match(url); got != want {
+			t.Errorf("Match(%q) = %v, want %v", url, got, want)
+		}
+	}
+}
+
+func TestFind_GitLabPrefixesDoNotCollide(t *testing.T) {
+	if got := Find("gitlab:mon-groupe"); got == nil || got.Name() != "gitlab" {
+		t.Errorf("Find(gitlab:...) = %v, want the gitlab provider", got)
+	}
+	if got := Find("gitlab-graphql:mon-groupe"); got == nil || got.Name() != "gitlab-graphql" {
+		t.Errorf("Find(gitlab-graphql:...) = %v, want the gitlab-graphql provider", got)
+	}
+}
+
+func TestLastPathSegmentAndParentPath(t *testing.T) {
+	cases := []struct {
+		fullPath   string
+		wantSlug   string
+		wantParent string
+	}{
+		{"mon-groupe", "mon-groupe", ""},
+		{"mon-groupe/sous-groupe", "sous-groupe", "mon-groupe"},
+		{"mon-groupe/sous-groupe/projet", "projet", "mon-groupe/sous-groupe"},
+	}
+	for _, c := range cases {
+		if got := lastPathSegment(c.fullPath); got != c.wantSlug {
+			t.Errorf("lastPathSegment(%q) = %q, want %q", c.fullPath, got, c.wantSlug)
+		}
+		if got := parentPath(c.fullPath); got != c.wantParent {
+			t.Errorf("parentPath(%q) = %q, want %q", c.fullPath, got, c.wantParent)
 		}
 	}
 }
