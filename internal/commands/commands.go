@@ -17,6 +17,7 @@ import (
 	"github.com/medialo/gogws/internal/commands/ff"
 	"github.com/medialo/gogws/internal/commands/initcmd"
 	"github.com/medialo/gogws/internal/commands/root"
+	"github.com/medialo/gogws/internal/commands/search"
 	"github.com/medialo/gogws/internal/commands/status"
 	"github.com/medialo/gogws/internal/commands/update"
 	"github.com/medialo/gogws/internal/commands/version"
@@ -43,6 +44,7 @@ func Execute() error {
 	rootCmd.AddCommand(configcmd.NewCommand())
 	rootCmd.AddCommand(dev.NewCommand())
 	rootCmd.AddCommand(doctor.NewDoctorCommand(root.GetConfig))
+	rootCmd.AddCommand(search.NewCommand(root.GetConfig))
 
 	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
 		return statusCmd.RunE(cmd, args)
