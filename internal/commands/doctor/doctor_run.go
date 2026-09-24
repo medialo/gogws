@@ -30,23 +30,26 @@ func newDoctorRunCommand(getConfig func() *config.Config) *cobra.Command {
 
 func runDoctorRun(getConfig func() *config.Config, ids []string) error {
 	cfg := getConfig()
+	if cfg == nil {
+		return fmt.Errorf("no workspace found (no .projects.gws file)")
+	}
 
 	ws, err := gws2.NewFromPath(cfg.WorkspaceRoot).RunDoctor(false).Load()
 	if err != nil {
 		return err
 	}
 
-	var result gws2.DoctorCheckResults
+	var results []gws2.WorkspaceDoctorResult
 	if len(ids) == 0 {
-		result, err = ws.RunAllDoctorChecks(autoFix)
+		results, err = ws.RunAllDoctorChecksRecursive(autoFix)
 	} else {
-		result, err = ws.RunDoctorChecks(ids, autoFix)
+		results, err = ws.RunDoctorChecksRecursive(ids, autoFix)
 	}
 	if err != nil {
 		return err
 	}
 
 	rendered := cli.NewRenderer()
-	fmt.Println(rendered.RenderDoctorRun(ws, result))
+	fmt.Println(rendered.RenderDoctorRun(ws, results))
 	return nil
 }
