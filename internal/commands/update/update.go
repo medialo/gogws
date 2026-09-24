@@ -42,10 +42,11 @@ Use --skip-workspaces to only clone projects.
 Use --prune to remove projects and workspaces from the .gws files when
 their repository can no longer be found (e.g. deleted or renamed upstream).
 
-A workspace remote of "github:<org>" or "gitlab:<group>" (or a full URL
-after the prefix, for self-hosted instances) is auto-discovered via that
-provider's API instead of git-cloned: its repos and subgroups are written
-to .projects.gws/.workspaces.gws, then picked up like any other entry.
+A workspace remote of "github:<org>", "gitlab:<group>" or
+"gitlab-graphql:<group>" (or a full URL after the prefix, for self-hosted
+instances) is auto-discovered via that provider's API instead of
+git-cloned: its repos and subgroups are written to
+.projects.gws/.workspaces.gws, then picked up like any other entry.
 Use --refresh-providers to re-query already-discovered ones (throttled by
 the provider-cache-ttl user setting), --force-refresh-providers to ignore
 that TTL, or --no-provider-discovery to disable discovery entirely.`,
@@ -58,7 +59,7 @@ that TTL, or --no-provider-discovery to disable discovery entirely.`,
 	cmd.Flags().BoolVar(&skipWorkspaces, "skip-workspaces", false, "skip cloning workspaces, only clone projects")
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "Set update to recursive mode (clone all workspaces and sub-projects)")
 	cmd.Flags().BoolVar(&prune, "prune", false, "Remove projects and workspaces from the .gws files when their repository cannot be found")
-	cmd.Flags().BoolVar(&noProviderDiscovery, "no-provider-discovery", false, "Disable auto-discovery of github:/gitlab: organization/group remotes; treat them as plain (failing) git remotes")
+	cmd.Flags().BoolVar(&noProviderDiscovery, "no-provider-discovery", false, "Disable auto-discovery of github:/gitlab:/gitlab-graphql: organization/group remotes; treat them as plain (failing) git remotes")
 	cmd.Flags().BoolVar(&refreshProviders, "refresh-providers", false, "Re-query already-discovered provider organizations/groups whose cache has expired")
 	cmd.Flags().BoolVar(&forceRefreshProviders, "force-refresh-providers", false, "Re-query all already-discovered provider organizations/groups, ignoring the cache TTL (implies --refresh-providers)")
 
@@ -216,8 +217,8 @@ func pruneNotFound(renderer *cli.Renderer, result *engine.ExecutionResult, remov
 	return removed, owners
 }
 
-// discoverAndMaterialize resolves a workspace's github:/gitlab: remote via
-// its provider's API and writes the resulting repos/subgroups into
+// discoverAndMaterialize resolves a workspace's github:/gitlab:/gitlab-graphql:
+// remote via its provider's API and writes the resulting repos/subgroups into
 // child's own .projects.gws/.workspaces.gws, in place of a git clone.
 func discoverAndMaterialize(ctx context.Context, provider providers.Provider, child *gws2.Workspace, url string) error {
 	group, err := provider.Discover(ctx, url, providers.MaxDiscoverDepth)
