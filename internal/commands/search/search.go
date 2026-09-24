@@ -1,19 +1,23 @@
 package search
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/ui/cli"
+	"github.com/medialo/gogws/internal/ui/prompt"
 
 	"charm.land/huh/v2"
 	"github.com/spf13/cobra"
 )
 
 var (
-	searchFullPath bool
-	searchGoToPath bool
+	searchFullPath        bool
+	searchGoToPath        bool
+	searchCompletionShell string
+	searchCompletionAlias []string
 )
 
 func NewCommand(getConfig func() *config.Config) *cobra.Command {
@@ -26,19 +30,40 @@ nested workspaces). By default the query is matched, case-insensitively,
 against each entry's final path segment (its name); use --full-path to
 match against the full absolute path instead.
 
-Use --cd (alias --go) to print the absolute path of the single match to
+Use --cd to print the absolute path of the single match to
 stdout instead of a table, for a shell "smart cd" alias, e.g.:
 
   gcd() { local p; p=$(gogws search --cd "$1") && cd "$p"; }
+
+Use --completion <shell> to print that alias ready-made instead of typing
+it by hand (bash, zsh, fish, powershell), to source from a shell rc file:
+
+  gogws search --completion bash >> ~/.bashrc
+
+Use --alias to name the generated function something other than "gcd"
+(repeatable, or comma-separated):
+
+  gogws search --completion zsh --alias gcd,gcdx >> ~/.zshrc
 `,
-		Args: cobra.ExactArgs(1),
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if searchCompletionShell != "" {
+				return runSearchCompletion(searchCompletionShell, searchCompletionAlias)
+			}
+			if len(searchCompletionAlias) > 0 {
+				return fmt.Errorf("--alias only applies together with --completion")
+			}
+			if len(args) != 1 {
+				return fmt.Errorf("accepts 1 arg(s), received %d", len(args))
+			}
 			return runSearch(getConfig, args[0])
 		},
 	}
 
 	cmd.Flags().BoolVar(&searchFullPath, "full-path", false, "match against the full path instead of just the name")
 	cmd.Flags().BoolVar(&searchGoToPath, "cd", false, "print the absolute path to stdout when there is exactly one match")
+	cmd.Flags().StringVar(&searchCompletionShell, "completion", "", "print a shell snippet defining a cd alias that wraps --cd (bash, zsh, fish, powershell)")
+	cmd.Flags().StringSliceVar(&searchCompletionAlias, "alias", nil, `alias name(s) for the generated cd function with --completion (default "gcd")`)
 
 	return cmd
 }
@@ -88,10 +113,6 @@ func runSearchGoTo(renderer *cli.Renderer, matches []gws2.Repository, query stri
 	}
 }
 
-// promptMatchSelection lets the user pick one of several ambiguous matches
-// via an interactive huh select. The form renders to stderr (huh's
-// default), so stdout stays reserved for the chosen path — preserving the
-// --cd/--go contract for `$(gogws search --cd "$1")`.
 func promptMatchSelection(renderer *cli.Renderer, matches []gws2.Repository, query string, fullPath bool) (gws2.Repository, error) {
 	opts := make([]huh.Option[gws2.Repository], 0, len(matches))
 	for _, m := range matches {
@@ -107,8 +128,11 @@ func promptMatchSelection(renderer *cli.Renderer, matches []gws2.Repository, que
 				Options(opts...).
 				Value(&selected),
 		),
-	).Run()
+	).WithKeyMap(prompt.KeyMap()).Run()
 	if err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return nil, fmt.Errorf("selection canceled for %q", query)
+		}
 		return nil, err
 	}
 

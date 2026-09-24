@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/ui/prompt"
 
 	"charm.land/huh/v2"
 )
@@ -21,7 +22,7 @@ func promptRepoDetails(args []string) (gitURL, folderName string, err error) {
 	}
 
 	if gitURL == "" {
-		if err := huh.NewInput().Title("Git url of the repository to add").Value(&gitURL).Run(); err != nil {
+		if err := prompt.RunField(huh.NewInput().Title("Git url of the repository to add").Value(&gitURL)); err != nil {
 			return "", "", err
 		}
 	}
@@ -30,7 +31,7 @@ func promptRepoDetails(args []string) (gitURL, folderName string, err error) {
 	}
 
 	if folderName == "" {
-		if err := huh.NewInput().Title("Folder name").Value(&folderName).Run(); err != nil {
+		if err := prompt.RunField(huh.NewInput().Title("Folder name").Value(&folderName)); err != nil {
 			return "", "", err
 		}
 	}

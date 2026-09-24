@@ -10,6 +10,7 @@ import (
 	"github.com/medialo/gogws/internal/gitignore"
 	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/ui/cli"
+	"github.com/medialo/gogws/internal/ui/prompt"
 
 	"charm.land/huh/v2"
 	"github.com/samber/lo"
@@ -113,7 +114,7 @@ func runInitWorkspaces() error {
 			huh.NewMultiSelect[workspaceEntry]().
 				Title("Found subdirectories:").
 				Options(opts...).
-				Value(&selectedWorkspaces))).Run()
+				Value(&selectedWorkspaces))).WithKeyMap(prompt.KeyMap()).Run()
 
 	if len(selectedWorkspaces) == 0 {
 		fmt.Println(renderer.RenderWarning("No workspaces configured"))
