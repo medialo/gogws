@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/engine"
 	"github.com/medialo/gogws/internal/git"
@@ -58,20 +59,20 @@ func runClone(getConfig func() *config.Config, args []string) error {
 	for _, repoPath := range args {
 		project, exists := projectMap[repoPath]
 		if !exists {
-			fmt.Println(renderer.RenderError(fmt.Sprintf("%s: not found in .projects.gws", repoPath)))
+			lipgloss.Println(renderer.RenderError(fmt.Sprintf("%s: not found in .projects.gws", repoPath)))
 			continue
 		}
 
 		fullPath := filepath.Join(cfg.WorkspaceRoot, project.GetPath())
 		status := git.GetStatus(fullPath)
 		if status.Exists {
-			fmt.Println(renderer.RenderWarning(fmt.Sprintf("%s: already exists", repoPath)))
+			lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("%s: already exists", repoPath)))
 			skipped = append(skipped, repoPath)
 			continue
 		}
 
 		if err := hooks.PreClone(cfg.WorkspaceRoot, repoPath); err != nil {
-			fmt.Println(renderer.RenderError(fmt.Sprintf("%s: pre-clone hook failed: %v", repoPath, err)))
+			lipgloss.Println(renderer.RenderError(fmt.Sprintf("%s: pre-clone hook failed: %v", repoPath, err)))
 			continue
 		}
 
@@ -106,13 +107,13 @@ func runClone(getConfig func() *config.Config, args []string) error {
 
 	for _, label := range execResult.SuccessLabels() {
 		if hookErr := hooks.PostClone(cfg.WorkspaceRoot, label, true); hookErr != nil {
-			fmt.Println(renderer.RenderWarning(fmt.Sprintf("%s: post-clone hook failed: %v", label, hookErr)))
+			lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("%s: post-clone hook failed: %v", label, hookErr)))
 		}
 	}
 
 	for _, label := range execResult.FailedLabels() {
 		if hookErr := hooks.PostClone(cfg.WorkspaceRoot, label, false); hookErr != nil {
-			fmt.Println(renderer.RenderWarning(fmt.Sprintf("%s: post-clone hook failed: %v", label, hookErr)))
+			lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("%s: post-clone hook failed: %v", label, hookErr)))
 		}
 	}
 

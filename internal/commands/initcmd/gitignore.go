@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/gitignore"
 	"github.com/medialo/gogws/internal/ui/cli"
 
@@ -56,7 +57,7 @@ func runInitGitignore() error {
 		}
 
 		if !hasSection {
-			fmt.Println(renderer.RenderWarning("No GWS section found in .gitignore"))
+			lipgloss.Println(renderer.RenderWarning("No GWS section found in .gitignore"))
 			return nil
 		}
 
@@ -64,7 +65,7 @@ func runInitGitignore() error {
 			return fmt.Errorf("failed to remove GWS section: %w", err)
 		}
 
-		fmt.Println(renderer.RenderSuccess("Removed GWS section from .gitignore"))
+		lipgloss.Println(renderer.RenderSuccess("Removed GWS section from .gitignore"))
 		return nil
 	}
 
@@ -72,7 +73,7 @@ func runInitGitignore() error {
 		if err := gitignore.CreateGitignore(workspaceRoot); err != nil {
 			return fmt.Errorf("failed to create .gitignore: %w", err)
 		}
-		fmt.Println(renderer.RenderSuccess("Created .gitignore with GWS configuration"))
+		lipgloss.Println(renderer.RenderSuccess("Created .gitignore with GWS configuration"))
 		return nil
 	}
 
@@ -82,8 +83,8 @@ func runInitGitignore() error {
 	}
 
 	if hasSection && !forceGitignore {
-		fmt.Println(renderer.RenderInfo("GWS section already exists in .gitignore"))
-		fmt.Println(renderer.RenderInfo("Use --force to update it"))
+		lipgloss.Println(renderer.RenderInfo("GWS section already exists in .gitignore"))
+		lipgloss.Println(renderer.RenderInfo("Use --force to update it"))
 		return nil
 	}
 
@@ -92,9 +93,9 @@ func runInitGitignore() error {
 	}
 
 	if hasSection {
-		fmt.Println(renderer.RenderSuccess("Updated GWS section in .gitignore"))
+		lipgloss.Println(renderer.RenderSuccess("Updated GWS section in .gitignore"))
 	} else {
-		fmt.Println(renderer.RenderSuccess("Added GWS section to .gitignore"))
+		lipgloss.Println(renderer.RenderSuccess("Added GWS section to .gitignore"))
 	}
 
 	return nil

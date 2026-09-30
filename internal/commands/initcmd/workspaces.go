@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 
+	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gitignore"
@@ -55,13 +56,13 @@ func preRunInitWorkspaces(getConfig func() *config.Config) error {
 		fileLocation, err := gws2.DeleteWorkspacesFile(cfg.WorkspaceRoot)
 
 		if fileLocation != "" {
-			fmt.Println(renderer.RenderWarning("Removing workspaces configuration file..."))
+			lipgloss.Println(renderer.RenderWarning("Removing workspaces configuration file..."))
 			if err != nil {
 				return fmt.Errorf("failed to remove existing %s: %w", fileLocation, err)
 			}
-			fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Workspaces configuration file removed")))
+			lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Workspaces configuration file removed")))
 		} else {
-			fmt.Println(renderer.RenderError(fmt.Sprintf("%s already exists. Use --reset to reinitialize", gws2.WorkspacesFileName)))
+			lipgloss.Println(renderer.RenderError(fmt.Sprintf("%s already exists. Use --reset to reinitialize", gws2.WorkspacesFileName)))
 		}
 	}
 	return nil
@@ -74,7 +75,7 @@ func runInitWorkspaces() error {
 	}
 
 	renderer := cli.NewRenderer()
-	fmt.Println(renderer.RenderInfo("Scanning current folder for git repositories..."))
+	lipgloss.Println(renderer.RenderInfo("Scanning current folder for git repositories..."))
 
 	discoveredGitRepo, err := git.DiscoverRepositories(workspaceRoot, 1)
 	if err != nil {
@@ -82,7 +83,7 @@ func runInitWorkspaces() error {
 	}
 
 	if len(discoveredGitRepo) == 0 {
-		fmt.Println(renderer.RenderWarning("No git repositories found in subdirectories"))
+		lipgloss.Println(renderer.RenderWarning("No git repositories found in subdirectories"))
 		return nil
 	}
 
@@ -117,7 +118,7 @@ func runInitWorkspaces() error {
 				Value(&selectedWorkspaces))).WithKeyMap(prompt.KeyMap()).Run()
 
 	if len(selectedWorkspaces) == 0 {
-		fmt.Println(renderer.RenderWarning("No workspaces configured"))
+		lipgloss.Println(renderer.RenderWarning("No workspaces configured"))
 		return nil
 	}
 
@@ -157,14 +158,14 @@ func runInitWorkspaces() error {
 		return fmt.Errorf("failed to save workspaces: %w", err)
 	}
 
-	fmt.Println()
-	fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Created %d workspaces in workpaces configuration file", len(selectedWorkspaces))))
+	lipgloss.Println()
+	lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Created %d workspaces in workpaces configuration file", len(selectedWorkspaces))))
 
 	if workspacesGitignore {
 		if err := gitignore.EnsureGWSSection(workspaceRoot); err != nil {
-			fmt.Println(renderer.RenderWarning(fmt.Sprintf("Failed to generate .gitignore: %v", err)))
+			lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("Failed to generate .gitignore: %v", err)))
 		} else {
-			fmt.Println(renderer.RenderSuccess("Generated .gitignore"))
+			lipgloss.Println(renderer.RenderSuccess("Generated .gitignore"))
 		}
 	}
 

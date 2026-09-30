@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"charm.land/fang/v2"
 	"github.com/medialo/gogws/internal/commands/add"
 	"github.com/medialo/gogws/internal/commands/check"
 	"github.com/medialo/gogws/internal/commands/clone"
@@ -21,8 +22,6 @@ import (
 	"github.com/medialo/gogws/internal/commands/status"
 	"github.com/medialo/gogws/internal/commands/update"
 	"github.com/medialo/gogws/internal/commands/version"
-
-	"charm.land/fang/v2"
 	"github.com/spf13/cobra"
 )
 

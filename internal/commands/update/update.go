@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/engine"
 	"github.com/medialo/gogws/internal/git"
@@ -99,7 +100,7 @@ func runUpdate(getConfig func() *config.Config) error {
 				missingWorkspaces = ws.MissingWorkspacesRecursive()
 			}
 			if len(missingWorkspaces) == 0 {
-				fmt.Println(renderer.RenderSuccess("All workspaces are already cloned"))
+				lipgloss.Println(renderer.RenderSuccess("All workspaces are already cloned"))
 			} else {
 				didClone = true
 				result := cloneWorkspaces(cfg.WorkspaceRoot, missingWorkspaces, cfg.Parallel, cfg.StopOnError, cfg.IsInteractive)
@@ -123,10 +124,10 @@ func runUpdate(getConfig func() *config.Config) error {
 				missingProjects = ws.MissingProjectsRecursive()
 			}
 			if len(missingProjects) == 0 {
-				fmt.Println(renderer.RenderSuccess("All projects are already cloned"))
+				lipgloss.Println(renderer.RenderSuccess("All projects are already cloned"))
 			} else {
 				didClone = true
-				fmt.Println(renderer.RenderInfo(fmt.Sprintf("Cloning %d missing projects...", len(missingProjects))))
+				lipgloss.Println(renderer.RenderInfo(fmt.Sprintf("Cloning %d missing projects...", len(missingProjects))))
 
 				result := cloneProjects(cfg.WorkspaceRoot, missingProjects, cfg.Parallel, cfg.StopOnError, cfg.IsInteractive)
 				if !cfg.IsInteractive {
@@ -172,7 +173,7 @@ func runUpdate(getConfig func() *config.Config) error {
 	}
 
 	if len(prunedRepos) > 0 {
-		fmt.Println(renderer.RenderWarning(fmt.Sprintf("Removed %d unreachable entries from the workspace: %s", len(prunedRepos), strings.Join(prunedRepos, ", "))))
+		lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("Removed %d unreachable entries from the workspace: %s", len(prunedRepos), strings.Join(prunedRepos, ", "))))
 	}
 
 	if !noProviderDiscovery && (refreshProviders || forceRefreshProviders) {
@@ -212,7 +213,7 @@ func pruneNotFound(renderer *cli.Renderer, result *engine.ExecutionResult, remov
 			seen[owner] = true
 			owners = append(owners, owner)
 		}
-		fmt.Println(renderer.RenderWarning(fmt.Sprintf("Repository not found, removed from workspace: %s", r.JobId)))
+		lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("Repository not found, removed from workspace: %s", r.JobId)))
 	}
 	return removed, owners
 }
@@ -253,7 +254,7 @@ func refreshProviderWorkspaces(renderer *cli.Renderer, ws *gws2.Workspace, force
 		return nil
 	}
 
-	fmt.Println(renderer.RenderInfo(fmt.Sprintf("Refreshing %d provider workspace(s)...", len(stale))))
+	lipgloss.Println(renderer.RenderInfo(fmt.Sprintf("Refreshing %d provider workspace(s)...", len(stale))))
 
 	jobs := make([]engine.Job, 0, len(stale))
 	for _, child := range stale {

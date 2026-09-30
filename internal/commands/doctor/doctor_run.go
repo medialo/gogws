@@ -3,6 +3,7 @@ package doctor
 import (
 	"fmt"
 
+	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/ui/cli"
@@ -50,6 +51,6 @@ func runDoctorRun(getConfig func() *config.Config, ids []string) error {
 	}
 
 	rendered := cli.NewRenderer()
-	fmt.Println(rendered.RenderDoctorRun(ws, results))
+	lipgloss.Println(rendered.RenderDoctorRun(ws, results))
 	return nil
 }

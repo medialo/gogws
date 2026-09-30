@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gws2"
@@ -72,16 +73,12 @@ func runAddWorkspace(getConfig func() *config.Config, args []string) error {
 			return fmt.Errorf("failed to add workspace: %w", err)
 		}
 
-		fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Added folder workspace %q", folderName)))
+		lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Added folder workspace %q", folderName)))
 		return nil
 	}
 
-	gitURL, folderName, err := promptRepoDetails(args)
+	gitURL, folderName, err := promptRepoDetails(ws, args)
 	if err != nil {
-		return err
-	}
-
-	if err := checkNotAlreadyKnown(ws, folderName); err != nil {
 		return err
 	}
 
@@ -92,13 +89,13 @@ func runAddWorkspace(getConfig func() *config.Config, args []string) error {
 		return fmt.Errorf("failed to add workspace: %w", err)
 	}
 
-	fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Added workspace %q -> %s", folderName, gitURL)))
+	lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Added workspace %q -> %s", folderName, gitURL)))
 
 	if autoCloneWorkspace {
 		if err := git.CloneWorkspace(context.Background(), child.GetOriginRemote(), child.GetPath(), nil); err != nil {
 			return fmt.Errorf("failed to clone repository: %w", err)
 		}
-		fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Cloned %s", folderName)))
+		lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Cloned %s", folderName)))
 	}
 
 	return nil

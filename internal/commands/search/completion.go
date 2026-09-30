@@ -4,28 +4,34 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/medialo/gogws/internal/utils"
 )
 
 const defaultCdAlias = "gcd"
 
 var validAliasName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 
-var cdSnippetRenderers = map[string]func(alias string) string{
-	"bash":       posixCdSnippet,
-	"zsh":        posixCdSnippet,
-	"fish":       fishCdSnippet,
-	"powershell": powershellCdSnippet,
+var cdSnippetRenderers = map[utils.ShellType]func(alias string) string{
+	utils.Bash:       posixCdSnippet,
+	utils.Zsh:        posixCdSnippet,
+	utils.Fish:       fishCdSnippet,
+	utils.Powershell: powershellCdSnippet,
 }
 
-func supportedCompletionShells() []string {
-	shells := make([]string, 0, len(cdSnippetRenderers))
-	for shell := range cdSnippetRenderers {
-		shells = append(shells, shell)
+func runSearchCompletion(shellStr string, aliases []string, printFull bool) error {
+
+	shell, ok := utils.ShellTypeString(shellStr)
+
+	if ok != nil {
+		return fmt.Errorf("unsupported --completion shell %q (want one of: %s)", shellStr, strings.Join(utils.ShellTypeStrings(), ", "))
 	}
-	return shells
-}
 
-func runSearchCompletion(shell string, aliases []string) error {
+	if !printFull {
+		fmt.Print(utils.SnippetScriptInit[shell](fmt.Sprintf("gogws search --completion %s --print-full-script", shell.String())))
+		return nil
+	}
+
 	if len(aliases) == 0 {
 		aliases = []string{defaultCdAlias}
 	}
@@ -35,10 +41,7 @@ func runSearchCompletion(shell string, aliases []string) error {
 		}
 	}
 
-	render, ok := cdSnippetRenderers[shell]
-	if !ok {
-		return fmt.Errorf("unsupported --completion shell %q (want one of: %s)", shell, strings.Join(supportedCompletionShells(), ", "))
-	}
+	render, _ := cdSnippetRenderers[shell]
 
 	var out strings.Builder
 	for _, alias := range aliases {

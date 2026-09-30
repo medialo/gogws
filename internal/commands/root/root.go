@@ -10,6 +10,8 @@ import (
 	"github.com/medialo/gogws/internal/hooks"
 	"github.com/medialo/gogws/internal/log"
 
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -41,6 +43,11 @@ Compatible with gws project files (.projects.gws)`,
 func persistentPreRun(cmd *cobra.Command, _ []string) error {
 	log.SetVerbose(verbosity)
 	slog.Debug("Running PersistentPreRunE", "command", "root")
+	noColor = noColor || viper.GetBool("no_color")
+	if noColor {
+		os.Setenv("NO_COLOR", "1")
+		lipgloss.Writer.Profile = colorprofile.Ascii
+	}
 	hooks.SetTrustMode(hooks.ParseTrustMode(trustHooks))
 
 	if parallel < 0 {

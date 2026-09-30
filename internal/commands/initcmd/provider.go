@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/hooks"
@@ -65,20 +66,20 @@ func runInitProvider(url string) error {
 
 	if exists {
 		if !resetProjectsGwsFile {
-			fmt.Println(renderer.RenderError("workspace already has .projects.gws/.workspaces.gws. Use --reset to reinitialize"))
+			lipgloss.Println(renderer.RenderError("workspace already has .projects.gws/.workspaces.gws. Use --reset to reinitialize"))
 			return nil
 		}
 		if fileLocation, err := gws2.DeleteProjectsFile(workspaceRoot); fileLocation != "" {
 			if err != nil {
 				return fmt.Errorf("failed to remove existing %s: %w", fileLocation, err)
 			}
-			fmt.Println(renderer.RenderSuccess("Removed existing .projects.gws"))
+			lipgloss.Println(renderer.RenderSuccess("Removed existing .projects.gws"))
 		}
 		if fileLocation, err := gws2.DeleteWorkspacesFile(workspaceRoot); fileLocation != "" {
 			if err != nil {
 				return fmt.Errorf("failed to remove existing %s: %w", fileLocation, err)
 			}
-			fmt.Println(renderer.RenderSuccess("Removed existing .workspaces.gws"))
+			lipgloss.Println(renderer.RenderSuccess("Removed existing .workspaces.gws"))
 		}
 	}
 
@@ -86,7 +87,7 @@ func runInitProvider(url string) error {
 		return fmt.Errorf("pre-init hook failed: %w", err)
 	}
 
-	fmt.Println(renderer.RenderInfo(fmt.Sprintf("Discovering %s...", url)))
+	lipgloss.Println(renderer.RenderInfo(fmt.Sprintf("Discovering %s...", url)))
 
 	group, err := provider.Discover(context.Background(), url, providers.MaxDiscoverDepth)
 	if err != nil {
@@ -94,7 +95,7 @@ func runInitProvider(url string) error {
 	}
 
 	if len(group.Projects) == 0 && len(group.Subgroups) == 0 {
-		fmt.Println(renderer.RenderWarning(fmt.Sprintf("Nothing found for %s", url)))
+		lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("Nothing found for %s", url)))
 		return nil
 	}
 
@@ -104,9 +105,9 @@ func runInitProvider(url string) error {
 	}
 
 	if len(root.Projects) > 0 {
-		fmt.Println(renderer.RenderProjectsList(root.Projects))
+		lipgloss.Println(renderer.RenderProjectsList(root.Projects))
 	}
-	fmt.Println(renderer.RenderSuccess(fmt.Sprintf(
+	lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf(
 		"Initialized workspace from %s: %d project(s), %d subgroup(s). Run 'gogws update --recursive' to clone.",
 		url, len(root.Projects), len(root.Children))))
 

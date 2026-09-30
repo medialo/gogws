@@ -1,7 +1,6 @@
 package help
 
 import (
-	"fmt"
 	"strings"
 
 	"charm.land/glamour/v2"
@@ -35,7 +34,7 @@ func HelpFunc(command *cobra.Command, args []string) {
 
 	if true {
 		helpTemplated := command.UseLine()
-		fmt.Println(renderWithGlamour(helpTemplated))
+		lipgloss.Println(renderWithGlamour(helpTemplated))
 	}
 
 	originalLong := command.Long
@@ -118,14 +117,14 @@ Use 'glab <command> <subcommand> --help' for more information about a command.`}
 	for _, e := range helpEntries {
 		if e.Title != "" {
 			// If there is a title, add indentation to each line in the body
-			fmt.Fprintln(out, titleStyle.Render(e.Title))
-			fmt.Fprintln(out, strings.Trim(e.Body, "\r\n"))
-			//fmt.Fprintln(out, utils.Indent(strings.Trim(e.Body, "\r\n"), "  ")
+			lipgloss.Fprintln(out, titleStyle.Render(e.Title))
+			lipgloss.Fprintln(out, strings.Trim(e.Body, "\r\n"))
+			//lipgloss.Fprintln(out, utils.Indent(strings.Trim(e.Body, "\r\n"), "  ")
 		} else {
 			// If there is no title print the body as is
-			fmt.Fprintln(out, e.Body)
+			lipgloss.Fprintln(out, e.Body)
 		}
-		fmt.Fprintln(out)
+		lipgloss.Fprintln(out)
 	}
 
 	command.Long = originalLong

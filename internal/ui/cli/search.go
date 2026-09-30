@@ -39,10 +39,6 @@ func (r *Renderer) RenderSearchResults(query string, matches []gws2.Repository, 
 	return output.String()
 }
 
-// RenderMatchedPath renders path with the substring that matched query
-// highlighted, styled the same way as the search results table's Path
-// column — used there and wherever else a match needs to be shown inline
-// (e.g. the --cd disambiguation prompt).
 func (r *Renderer) RenderMatchedPath(path, query string, fullPath bool) string {
 	if query == "" {
 		return r.theme.Path.Render(path)

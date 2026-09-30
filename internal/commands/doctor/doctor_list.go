@@ -1,7 +1,6 @@
 package doctor
 
 import (
-	"fmt"
 	"log/slog"
 	"strconv"
 
@@ -44,7 +43,7 @@ func runDoctorList() error {
 		}
 		t.Row(strconv.Itoa(int(id)), rule.Name, rule.Description, autoFix)
 	}
-	fmt.Println(t.Render())
-	fmt.Println(renderer.Theme().Subtle.Render("Use `gogws doctor run <id> or <name>` to run a specific check"))
+	lipgloss.Println(t.Render())
+	lipgloss.Println(renderer.Theme().Subtle.Render("Use `gogws doctor run <id> or <name>` to run a specific check"))
 	return nil
 }

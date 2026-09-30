@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/gws2"
 
@@ -58,13 +59,13 @@ func preRunInitProjects(getConfig func() *config.Config) error {
 		fileLocation, err := gws2.DeleteProjectsFile(cfg.WorkspaceRoot)
 
 		if fileLocation != "" {
-			fmt.Println(renderer.RenderWarning("Removing projects configuration file..."))
+			lipgloss.Println(renderer.RenderWarning("Removing projects configuration file..."))
 			if err != nil {
 				return fmt.Errorf("failed to remove configuration %s: %w", fileLocation, err)
 			}
-			fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Projects configuration file removed")))
+			lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Projects configuration file removed")))
 		} else {
-			fmt.Println(renderer.RenderError(fmt.Sprintf("%s already exists. Use --reset to reinitialize", gws2.ProjectsFileName)))
+			lipgloss.Println(renderer.RenderError(fmt.Sprintf("%s already exists. Use --reset to reinitialize", gws2.ProjectsFileName)))
 		}
 	}
 	return nil
@@ -78,7 +79,7 @@ func postRunInitProjects(getConfig func() *config.Config) error {
 		}
 
 		if err := gitignore.EnsureGWSSection(workspaceRoot); err != nil {
-			fmt.Println(renderer.RenderWarning(fmt.Sprintf("Failed to generate .gitignore: %v", err)))
+			lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("Failed to generate .gitignore: %v", err)))
 		}
 	}
 	return nil
@@ -116,19 +117,19 @@ func runInitProjects() error {
 
 	if fileExists {
 		if resetProjectsGwsFile {
-			fmt.Println(renderer.RenderWarning(fmt.Sprintf("Removing existing %s", projectsFile)))
+			lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("Removing existing %s", projectsFile)))
 			if err := os.Remove(projectsFile); err != nil {
 				return fmt.Errorf("failed to remove existing %s: %w", projectsFile, err)
 			}
-			fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Removed existing %s", projectsFile)))
+			lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Removed existing %s", projectsFile)))
 			projectsFile = filepath.Join(gwsDir, gws2.ProjectsFileName)
 		} else {
-			fmt.Println(renderer.RenderError(fmt.Sprintf("projects.%s already exists. Use --reset to reinitialize", gws2.FileExtension)))
+			lipgloss.Println(renderer.RenderError(fmt.Sprintf("projects.%s already exists. Use --reset to reinitialize", gws2.FileExtension)))
 			return nil
 		}
 	}
 
-	fmt.Println(renderer.RenderInfo("Scanning workspace for git repositories..."))
+	lipgloss.Println(renderer.RenderInfo("Scanning workspace for git repositories..."))
 
 	discovered, err := git.DiscoverRepositories(workspaceRoot, 10)
 	if err != nil {
@@ -136,7 +137,7 @@ func runInitProjects() error {
 	}
 
 	if len(discovered) == 0 {
-		fmt.Println(renderer.RenderWarning("No git repositories found in workspace"))
+		lipgloss.Println(renderer.RenderWarning("No git repositories found in workspace"))
 		return nil
 	}
 
@@ -146,7 +147,7 @@ func runInitProjects() error {
 	for i, d := range discovered {
 		projects[i] = gws2.NewProject(workspaceRoot, d.Path, toGitRemotePointers(d.Remotes))
 	}
-	fmt.Println(renderer.RenderProjectsList(projects))
+	lipgloss.Println(renderer.RenderProjectsList(projects))
 
 	file, err := os.Create(projectsFile)
 	if err != nil {
@@ -167,7 +168,7 @@ func runInitProjects() error {
 		}
 	}
 
-	fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Created %s with %d repositories", projectsFile, len(projects))))
+	lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Created %s with %d repositories", projectsFile, len(projects))))
 
 	if err := hooks.PostInit(workspaceRoot, projectPaths); err != nil {
 		return fmt.Errorf("post-init hook failed: %w", err)

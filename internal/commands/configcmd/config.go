@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/ui/cli"
 
@@ -69,14 +70,14 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 
 	renderer := cli.NewRenderer()
 
-	fmt.Println(renderer.RenderHeader("GOGWS Configuration"))
-	fmt.Println()
-	fmt.Printf("  File: %s\n\n", configPath)
+	lipgloss.Println(renderer.RenderHeader("GOGWS Configuration"))
+	lipgloss.Println()
+	lipgloss.Printf("  File: %s\n\n", configPath)
 
 	if len(resolved.TrustedWorkspaces.Value) > 0 {
-		fmt.Println(renderer.RenderConfigValue("trusted-workspaces", resolved.TrustedWorkspaces.Value, string(resolved.TrustedWorkspaces.Source)))
+		lipgloss.Println(renderer.RenderConfigValue("trusted-workspaces", resolved.TrustedWorkspaces.Value, string(resolved.TrustedWorkspaces.Source)))
 	} else {
-		fmt.Println(renderer.RenderConfigValue("trusted-workspaces", "(none)", string(resolved.TrustedWorkspaces.Source)))
+		lipgloss.Println(renderer.RenderConfigValue("trusted-workspaces", "(none)", string(resolved.TrustedWorkspaces.Source)))
 	}
 
 	return nil
@@ -94,11 +95,11 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 	switch key {
 	case "trusted-workspaces":
 		if len(resolved.TrustedWorkspaces.Value) == 0 {
-			fmt.Printf("(none) (source: %s)\n", resolved.TrustedWorkspaces.Source)
+			lipgloss.Printf("(none) (source: %s)\n", resolved.TrustedWorkspaces.Source)
 		} else {
-			fmt.Printf("(source: %s)\n", resolved.TrustedWorkspaces.Source)
+			lipgloss.Printf("(source: %s)\n", resolved.TrustedWorkspaces.Source)
 			for _, ws := range resolved.TrustedWorkspaces.Value {
-				fmt.Printf("  - %s\n", ws)
+				lipgloss.Printf("  - %s\n", ws)
 			}
 		}
 	default:
@@ -121,7 +122,7 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to add trusted workspace: %w", err)
 		}
 		renderer := cli.NewRenderer()
-		fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Added trusted workspace: %s", valueStr)))
+		lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Added trusted workspace: %s", valueStr)))
 		return nil
 	default:
 		return fmt.Errorf("unknown configuration key: %s\n\nAvailable keys:\n  %s",
@@ -132,19 +133,19 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 func runConfigList(cmd *cobra.Command, args []string) error {
 	renderer := cli.NewRenderer()
 
-	fmt.Println(renderer.RenderHeader("Available Configuration Keys"))
-	fmt.Println()
+	lipgloss.Println(renderer.RenderHeader("Available Configuration Keys"))
+	lipgloss.Println()
 
 	keys := config.GetAvailableConfigKeys()
 	for _, key := range keys {
-		fmt.Printf("  %s\n", key)
+		lipgloss.Printf("  %s\n", key)
 
 		switch key {
 		case "trusted-workspaces":
-			fmt.Printf("    type: list of paths\n")
-			fmt.Printf("    desc: Workspace paths where local hooks are trusted\n")
+			lipgloss.Printf("    type: list of paths\n")
+			lipgloss.Printf("    desc: Workspace paths where local hooks are trusted\n")
 		}
-		fmt.Println()
+		lipgloss.Println()
 	}
 
 	return nil

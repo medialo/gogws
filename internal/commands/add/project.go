@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gws2"
@@ -35,17 +36,13 @@ func runAddProject(getConfig func() *config.Config, args []string) error {
 		return fmt.Errorf("no workspace found (no .projects.gws file)")
 	}
 
-	gitURL, folderName, err := promptRepoDetails(args)
-	if err != nil {
-		return err
-	}
-
 	ws, err := gws2.NewFromPath(cfg.WorkspaceRoot).RunDoctor(false).Recursive(false).Load()
 	if err != nil {
 		return fmt.Errorf("failed to resolve workspace: %w", err)
 	}
 
-	if err := checkNotAlreadyKnown(ws, folderName); err != nil {
+	gitURL, folderName, err := promptRepoDetails(ws, args)
+	if err != nil {
 		return err
 	}
 
@@ -57,13 +54,13 @@ func runAddProject(getConfig func() *config.Config, args []string) error {
 	}
 
 	renderer := cli.NewRenderer()
-	fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Added project %q -> %s", folderName, gitURL)))
+	lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Added project %q -> %s", folderName, gitURL)))
 
 	if autoCloneProject {
 		if err := git.Clone(context.Background(), project.GetOriginRemote(), project.GetPath(), nil); err != nil {
 			return fmt.Errorf("failed to clone repository: %w", err)
 		}
-		fmt.Println(renderer.RenderSuccess(fmt.Sprintf("Cloned %s", folderName)))
+		lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Cloned %s", folderName)))
 	}
 
 	return nil

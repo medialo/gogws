@@ -9,6 +9,7 @@ import (
 	"sort"
 	"sync"
 
+	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/export"
 	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/view"
@@ -70,13 +71,13 @@ func runStatus(getConfig func() *config.Config) error {
 		if err != nil {
 			return fmt.Errorf("failed to export status: %w", err)
 		}
-		fmt.Println(output)
+		lipgloss.Println(output)
 		return nil
 	}
 
 	renderer := cli.NewRenderer()
 	output := renderer.RenderStatus(rootWorkspaceStatus, projectRepoStatus, workspaceRepoStatus, ws2.Name, cfg.OnlyChanges)
-	fmt.Println(output)
+	lipgloss.Println(output)
 
 	return nil
 }

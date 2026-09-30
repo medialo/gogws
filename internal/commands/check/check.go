@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gws2"
@@ -91,7 +92,7 @@ func runCheck(getConfig func() *config.Config) error {
 	}
 	sort.Strings(sortedPaths)
 
-	fmt.Println(renderer.RenderInfoWithIcon(fmt.Sprintf("Checking %d repositories...", len(sortedPaths))))
+	lipgloss.Println(renderer.RenderInfoWithIcon(fmt.Sprintf("Checking %d repositories...", len(sortedPaths))))
 
 	type checkEntry struct {
 		label  string
@@ -138,16 +139,16 @@ func runCheck(getConfig func() *config.Config) error {
 	}
 
 	for _, e := range entries {
-		fmt.Println(renderer.RenderRepoStatus(e.label, e.status, nameWidth))
+		lipgloss.Println(renderer.RenderRepoStatus(e.label, e.status, nameWidth))
 	}
 
 	if !checkFlagShowKnown && knownCount > 0 {
-		fmt.Println(renderer.RenderSuccess(fmt.Sprintf("%d known repositories (use --show-known to list)", knownCount)))
+		lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("%d known repositories (use --show-known to list)", knownCount)))
 	}
 
 	if missingCount > 0 {
 		repo := plural.Selectf(missingCount, "%d", plural.One, "repository", plural.Other, "repositories")
-		fmt.Println(renderer.RenderInfoWithIcon(fmt.Sprintf("Use 'gogws update' to clone the %d missing %s", missingCount, repo)))
+		lipgloss.Println(renderer.RenderInfoWithIcon(fmt.Sprintf("Use 'gogws update' to clone the %d missing %s", missingCount, repo)))
 	}
 
 	if err := hooks.PostCheck(cfg.WorkspaceRoot, unknown); err != nil {

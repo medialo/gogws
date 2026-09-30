@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/ui/cli"
@@ -14,10 +15,11 @@ import (
 )
 
 var (
-	searchFullPath        bool
-	searchGoToPath        bool
-	searchCompletionShell string
-	searchCompletionAlias []string
+	searchFullPath            bool
+	searchGoToPath            bool
+	searchCompletionShell     string
+	searchCompletionAlias     []string
+	printFullSearchScriptInit bool
 )
 
 func NewCommand(getConfig func() *config.Config) *cobra.Command {
@@ -48,7 +50,7 @@ Use --alias to name the generated function something other than "gcd"
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if searchCompletionShell != "" {
-				return runSearchCompletion(searchCompletionShell, searchCompletionAlias)
+				return runSearchCompletion(searchCompletionShell, searchCompletionAlias, printFullSearchScriptInit)
 			}
 			if len(searchCompletionAlias) > 0 {
 				return fmt.Errorf("--alias only applies together with --completion")
@@ -65,6 +67,9 @@ Use --alias to name the generated function something other than "gcd"
 	cmd.Flags().StringVar(&searchCompletionShell, "completion", "", "print a shell snippet defining a cd alias that wraps --cd (bash, zsh, fish, powershell)")
 	cmd.Flags().StringSliceVar(&searchCompletionAlias, "alias", nil, `alias name(s) for the generated cd function with --completion (default "gcd")`)
 
+	printFullSearchScriptInitName := "print-full-script"
+	cmd.Flags().BoolVar(&printFullSearchScriptInit, printFullSearchScriptInitName, false, "")
+	_ = cmd.Flags().MarkHidden(printFullSearchScriptInitName)
 	return cmd
 }
 
@@ -92,7 +97,7 @@ func runSearch(getConfig func() *config.Config, query string) error {
 		return runSearchGoTo(renderer, matches, query, searchFullPath)
 	}
 
-	fmt.Println(renderer.RenderSearchResults(query, matches, searchFullPath))
+	lipgloss.Println(renderer.RenderSearchResults(query, matches, searchFullPath))
 	return nil
 }
 
@@ -101,14 +106,14 @@ func runSearchGoTo(renderer *cli.Renderer, matches []gws2.Repository, query stri
 	case 0:
 		return fmt.Errorf("no match for %q", query)
 	case 1:
-		fmt.Println(matches[0].GetPath())
+		lipgloss.Println(matches[0].GetPath())
 		return nil
 	default:
 		selected, err := promptMatchSelection(renderer, matches, query, fullPath)
 		if err != nil {
 			return err
 		}
-		fmt.Println(selected.GetPath())
+		lipgloss.Println(selected.GetPath())
 		return nil
 	}
 }
