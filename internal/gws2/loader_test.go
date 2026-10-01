@@ -31,6 +31,25 @@ func TestLoad_SelfLineIsNotAChildWorkspace(t *testing.T) {
 	if got, ok := ws.Index().Get(root); !ok || got != Repository(ws) {
 		t.Fatalf("index entry for root = %v, want the root workspace", got)
 	}
+	if !ws.IsGitRepository() || ws.GetOriginRemote().URL != "git@example.com:org/root.git" {
+		t.Fatalf("root must take its remote from its own '.' line, got %+v", ws.Remotes)
+	}
+	sub := ws.Children[0]
+	if sub.IsGitRepository() {
+		t.Fatalf("sub declared as folder by its parent must stay a folder, got %+v", sub.Remotes)
+	}
+}
+
+func TestLoad_RootWithoutSelfLineStaysFolder(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, WorkspacesFileName), "sub | folder\n")
+	ws, err := NewFromPath(root).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ws.IsGitRepository() {
+		t.Fatalf("root without '.' line must not be git-backed, got %+v", ws.Remotes)
+	}
 }
 
 func TestSaveWorkspace_KeepsSelfLine(t *testing.T) {

@@ -63,7 +63,11 @@ func (l *Loader) loadRecursiveInit(rootPath string) (*Workspace, error) {
 	ws := NewRootWorkspace(rootPath)
 	ws.setIndex(NewIndex())
 
-	return l.loadRecursive(ws, rootPath, 0)
+	ws, err := l.loadRecursive(ws, rootPath, 0)
+	if ws != nil && len(ws.Remotes) == 0 && ws.SelfEntry != nil {
+		ws.Remotes = ws.SelfEntry.Remotes
+	}
+	return ws, err
 }
 
 func (l *Loader) loadRecursive(wsRootForCurrRecurCall *Workspace, rootPath string, depth int) (*Workspace, error) {
