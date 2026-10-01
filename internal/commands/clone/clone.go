@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
@@ -45,11 +47,6 @@ func runClone(getConfig func() *config.Config, args []string) error {
 		return fmt.Errorf("failed to load projects: %w", err)
 	}
 
-	projectMap := make(map[string]*gws2.Project)
-	for _, project := range ws.Projects {
-		projectMap[project.GetPath()] = project
-	}
-
 	renderer := cli.NewRenderer()
 	isInteractive := term.IsTerminal(int(os.Stdout.Fd()))
 
@@ -62,14 +59,13 @@ func runClone(getConfig func() *config.Config, args []string) error {
 	var skipped []string
 
 	for _, repoPath := range args {
-		project, exists := projectMap[repoPath]
-		if !exists {
+		project := findProject(ws, repoPath)
+		if project == nil {
 			lipgloss.Println(renderer.RenderError(fmt.Sprintf("%s: not found in .projects.gws", repoPath)))
 			continue
 		}
 
-		fullPath := filepath.Join(cfg.WorkspaceRoot, project.GetPath())
-		status := git.GetStatus(fullPath)
+		status := git.GetStatus(project.GetPath())
 		if status.Exists {
 			lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("%s: already exists", repoPath)))
 			skipped = append(skipped, repoPath)
@@ -80,7 +76,7 @@ func runClone(getConfig func() *config.Config, args []string) error {
 			JobNameId: repoPath,
 			Fn: func(ctx context.Context, notify engine.Notify) error {
 				return projectHooks.Around(ctx, project, notify, func() error {
-					return git.CloneWorkspace(ctx, project.GetOriginRemote(), project.Name, engine.WrapRunner(notify))
+					return git.Clone(ctx, project.GetOriginRemote(), project.GetPath(), engine.WrapRunner(notify))
 				})
 			},
 		})
@@ -121,4 +117,27 @@ func runClone(getConfig func() *config.Config, args []string) error {
 	}
 
 	return nil
+}
+
+func findProject(ws *gws2.Workspace, arg string) *gws2.Project {
+	candidates := []string{filepath.Join(ws.GetPath(), arg)}
+	if abs, err := filepath.Abs(arg); err == nil {
+		candidates = append(candidates, abs)
+	}
+	for _, p := range ws.Projects {
+		for _, c := range candidates {
+			if samePath(p.GetPath(), c) {
+				return p
+			}
+		}
+	}
+	return nil
+}
+
+func samePath(a, b string) bool {
+	a, b = filepath.Clean(a), filepath.Clean(b)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
