@@ -21,6 +21,9 @@ func parseProjectsFile(rootPath string) ([]*Project, error) {
 
 	file, err := os.Open(projectsPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return []*Project{}, nil
+		}
 		return nil, fmt.Errorf("failed to open projects file: %w", err)
 	}
 	defer file.Close()

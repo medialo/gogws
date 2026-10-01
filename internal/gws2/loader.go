@@ -87,8 +87,8 @@ func (l *Loader) loadRecursive(wsRootForCurrRecurCall *Workspace, rootPath strin
 
 	slog.Debug("Loading workspace", "depth", depth, "path", rootPath)
 
-	_, projectsLocation := getProjectsConfigFileLocation(rootPath)
-	if projectsLocation != nil {
+	projectsMissing, projectsLocation := getProjectsConfigFileLocation(rootPath)
+	if !projectsMissing && projectsLocation != nil {
 		if projectsLocation.HasDuplicate {
 			legacyPath := filepath.Join(rootPath, ProjectsFileName)
 			slog.Warn("Duplicate projects file found - using .gws/projects.gws, please remove the legacy file",
@@ -111,8 +111,8 @@ func (l *Loader) loadRecursive(wsRootForCurrRecurCall *Workspace, rootPath strin
 		}
 	}
 
-	_, workspacesLocation := getWorkspacesConfigFileLocation(rootPath)
-	if workspacesLocation != nil {
+	workspacesMissing, workspacesLocation := getWorkspacesConfigFileLocation(rootPath)
+	if !workspacesMissing && workspacesLocation != nil {
 		if workspacesLocation.HasDuplicate {
 			legacyPath := filepath.Join(rootPath, WorkspacesFileName)
 			slog.Warn("Duplicate workspaces file found - using .gws/workspaces.gws, please remove the legacy file",

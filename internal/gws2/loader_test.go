@@ -1,6 +1,7 @@
 package gws2
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,6 +38,30 @@ func TestLoad_SelfLineIsNotAChildWorkspace(t *testing.T) {
 	sub := ws.Children[0]
 	if sub.IsGitRepository() {
 		t.Fatalf("sub declared as folder by its parent must stay a folder, got %+v", sub.Remotes)
+	}
+}
+
+func TestLoad_MissingProjectsFileIsNotAWarning(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, ConfigDirName, WorkspacesFileName), "sub | folder\n")
+	if err := os.MkdirAll(filepath.Join(root, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var logs strings.Builder
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	ws, err := NewFromPath(root).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ws.Projects) != 0 || len(ws.Children) != 1 {
+		t.Fatalf("got %d projects, %d children", len(ws.Projects), len(ws.Children))
+	}
+	if logs.Len() > 0 {
+		t.Fatalf("unexpected warnings:\n%s", logs.String())
 	}
 }
 
