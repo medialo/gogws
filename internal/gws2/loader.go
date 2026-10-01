@@ -121,7 +121,8 @@ func (l *Loader) loadRecursive(wsRootForCurrRecurCall *Workspace, rootPath strin
 			slog.Warn("Failed to read workspaces", "path", rootPath, "err", err)
 		} else {
 			for _, childRepository := range workspacesFromFile {
-				if childRepository.AbsolutePath == "." { // skip current workspace already added
+				if childRepository.RelativePath == "." || pathKey(childRepository.AbsolutePath) == pathKey(rootPath) {
+					wsRootForCurrRecurCall.SelfEntry = childRepository
 					continue
 				}
 				nextRootPath := childRepository.AbsolutePath

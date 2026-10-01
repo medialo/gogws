@@ -110,6 +110,7 @@ type Workspace struct {
 	Error               error
 	Projects            []*Project
 	Children            []*Workspace
+	SelfEntry           *Workspace
 	WorkspaceConfigFile *ConfigFile
 	ProjectConfigFile   *ConfigFile
 }
@@ -371,8 +372,11 @@ func (w *Workspace) SaveWorkspace() error {
 	}
 	defer file.Close()
 
-	lines := make([]string, 0, len(w.Children))
+	lines := make([]string, 0, len(w.Children)+1)
 
+	if w.SelfEntry != nil {
+		lines = append(lines, w.SelfEntry.formatBaseRepository())
+	}
 	for _, ws := range w.Children {
 		lines = append(lines, ws.formatBaseRepository())
 	}
