@@ -14,7 +14,6 @@ import (
 	"github.com/medialo/gogws/internal/hooks"
 	"github.com/medialo/gogws/internal/ui/cli"
 	"github.com/spf13/cobra"
-	"golang.org/x/text/feature/plural"
 )
 
 var checkFlagShowKnown bool
@@ -113,6 +112,11 @@ func runCheck(getConfig func() *config.Config) error {
 		switch {
 		case gws2.IsPathIgnored(path, ignorePatterns):
 			entries = append(entries, checkEntry{label, "Ignored"})
+		case knownByPath[path] != nil && !knownByPath[path].IsGitRepository() && isDir(path):
+			knownCount++
+			if checkFlagShowKnown {
+				entries = append(entries, checkEntry{label, "Known"})
+			}
 		case !isGitRepoDir(path):
 			missingCount++
 			entries = append(entries, checkEntry{label, "Missing"})
@@ -147,7 +151,10 @@ func runCheck(getConfig func() *config.Config) error {
 	}
 
 	if missingCount > 0 {
-		repo := plural.Selectf(missingCount, "%d", plural.One, "repository", plural.Other, "repositories")
+		repo := "repositories"
+		if missingCount == 1 {
+			repo = "repository"
+		}
 		lipgloss.Println(renderer.RenderInfoWithIcon(fmt.Sprintf("Use 'gogws update' to clone the %d missing %s", missingCount, repo)))
 	}
 
@@ -156,6 +163,11 @@ func runCheck(getConfig func() *config.Config) error {
 	}
 
 	return nil
+}
+
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 func isGitRepoDir(path string) bool {
