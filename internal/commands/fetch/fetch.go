@@ -6,7 +6,6 @@ import (
 	"github.com/medialo/gogws/internal/gws2"
 	"log/slog"
 	"os"
-	"path/filepath"
 
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/engine"
@@ -57,7 +56,7 @@ func runFetch(getConfig func() *config.Config) error {
 	var skippedJobs []engine.JobResult
 
 	for _, p := range ws.Projects {
-		repoPath := filepath.Join(cfg.WorkspaceRoot, p.GetPath())
+		repoPath := p.GetPath()
 
 		jobs = append(jobs, engine.Job{
 			JobNameId: p.GetPath(),
