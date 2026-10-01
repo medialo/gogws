@@ -23,9 +23,7 @@ func (r *Renderer) renderRepository(repositoryStatusView *view.GitRepositoryStat
 
 	if !status.Exists {
 		summary.Missing++
-		if !onlyChanges {
-			return r.renderMissingRepo(status), []string{}
-		}
+		return r.renderMissingRepo(status), []string{}
 	}
 
 	if status.Error != nil {
@@ -37,12 +35,13 @@ func (r *Renderer) renderRepository(repositoryStatusView *view.GitRepositoryStat
 
 	if isClean {
 		summary.Clean++
-		if !onlyChanges {
-			if status.Oid == "(initial)" {
-				return r.renderEmptyRepo(status), []string{}
-			}
-			return r.renderRepo(status)
+		if onlyChanges {
+			return "", nil
 		}
+		if status.Oid == "(initial)" {
+			return r.renderEmptyRepo(status), []string{}
+		}
+		return r.renderRepo(status)
 	}
 
 	summary.Changed++

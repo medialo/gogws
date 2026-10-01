@@ -56,7 +56,7 @@ func (r *Renderer) renderStatusRepositoriesWorkspace(rootWorkspaceStatus, projec
 	output.WriteString(r.theme.Subtitle.Render(title))
 	output.WriteString("\n")
 
-	repositoryTitleRendered, branchesRendered := r.renderRepository(rootWorkspaceStatus[0], summary, onlyChanges)
+	repositoryTitleRendered, branchesRendered := r.renderRepository(rootWorkspaceStatus[0], summary, false)
 
 	hasMore := len(projectRepoStatus) > 1
 	branchPrefix := lo.Ternary(hasMore, "│", "")
@@ -75,6 +75,9 @@ func (r *Renderer) renderStatusRepositoriesWorkspace(rootWorkspaceStatus, projec
 
 	for _, statusView := range projectRepoStatus {
 		repositoryTitleRendered, branchesRendered := r.renderRepository(statusView, summary, onlyChanges)
+		if repositoryTitleRendered == "" {
+			continue
+		}
 
 		parts := []string{repositoryTitleRendered}
 		if len(branchesRendered) > 0 {
@@ -109,6 +112,9 @@ func (r *Renderer) renderStatusRepositoriesProject(projectRepoStatus []*view.Git
 	output.WriteString("\n")
 	for _, statusView := range projectRepoStatus {
 		repositoryTitleRendered, branchesRendered := r.renderRepository(statusView, summary, onlyChanges)
+		if repositoryTitleRendered == "" {
+			continue
+		}
 
 		parts := []string{repositoryTitleRendered}
 		if len(branchesRendered) > 0 {
