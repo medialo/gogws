@@ -124,8 +124,10 @@ gogws doctor list
 ## Other
 
 ```bash
-gogws config                 # show ~/.gws/config.yaml, see workspace files
-gogws config list            # available keys
+gogws config                            # show ~/.gws/config.yaml
+gogws config list                       # available keys
+gogws config get provider-cache-ttl
+gogws config set provider-cache-ttl 12h
 gogws completion bash|zsh|fish|powershell
 gogws version
 ```

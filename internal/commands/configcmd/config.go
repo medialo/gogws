@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
@@ -44,7 +45,8 @@ func newSetCommand() *cobra.Command {
 		Long: `Set a configuration value.
 
 Available keys:
-  trusted-workspaces    List of trusted workspace paths for hooks`,
+  provider-cache-ttl    How long a discovered provider workspace is kept before --refresh-providers re-reads it (e.g. 12h)
+  trusted-workspaces    Deprecated, no longer grants trust to hooks`,
 		Args: cobra.ExactArgs(2),
 		RunE: runConfigSet,
 	}
@@ -79,6 +81,7 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 	} else {
 		lipgloss.Println(renderer.RenderConfigValue("trusted-workspaces", "(none)", string(resolved.TrustedWorkspaces.Source)))
 	}
+	lipgloss.Println(renderer.RenderConfigValue("provider-cache-ttl", resolved.ProviderCacheTTL.Value, string(resolved.ProviderCacheTTL.Source)))
 
 	return nil
 }
@@ -102,6 +105,8 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 				lipgloss.Printf("  - %s\n", ws)
 			}
 		}
+	case "provider-cache-ttl":
+		lipgloss.Printf("%s (source: %s)\n", resolved.ProviderCacheTTL.Value, resolved.ProviderCacheTTL.Source)
 	default:
 		return fmt.Errorf("unknown configuration key: %s\n\nAvailable keys:\n  %s",
 			key, strings.Join(config.GetAvailableConfigKeys(), "\n  "))
@@ -124,6 +129,16 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 		renderer := cli.NewRenderer()
 		lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Added trusted workspace: %s", valueStr)))
 		return nil
+	case "provider-cache-ttl":
+		if _, err := time.ParseDuration(valueStr); err != nil {
+			return fmt.Errorf("invalid duration %q for provider-cache-ttl (e.g. 30m, 12h): %w", valueStr, err)
+		}
+		if err := config.SetUserConfigValue(key, valueStr); err != nil {
+			return fmt.Errorf("failed to set provider-cache-ttl: %w", err)
+		}
+		renderer := cli.NewRenderer()
+		lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("provider-cache-ttl set to %s", valueStr)))
+		return nil
 	default:
 		return fmt.Errorf("unknown configuration key: %s\n\nAvailable keys:\n  %s",
 			key, strings.Join(config.GetAvailableConfigKeys(), "\n  "))
@@ -144,6 +159,9 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 		case "trusted-workspaces":
 			lipgloss.Printf("    type: list of paths\n")
 			lipgloss.Printf("    desc: Deprecated, no longer grants trust. Local hooks are trusted per file (path + sha256) in ~/.gws/%s\n", config.TrustedHooksFile)
+		case "provider-cache-ttl":
+			lipgloss.Printf("    type: duration (default %s)\n", config.DefaultProviderCacheTTL)
+			lipgloss.Printf("    desc: How long a discovered provider workspace is kept before --refresh-providers re-reads it\n")
 		}
 		lipgloss.Println()
 	}
