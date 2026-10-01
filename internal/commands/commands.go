@@ -58,5 +58,5 @@ func Execute() error {
 		os.Exit(1)
 	}()
 
-	return fang.Execute(context.Background(), rootCmd)
+	return fang.Execute(context.Background(), rootCmd, fang.WithVersion(version.Current()), fang.WithCommit(version.Commit))
 }

@@ -1,0 +1,42 @@
+version: 2
+
+project_name: gogws
+
+builds:
+  - main: ./cmd/gogws
+    binary: gogws
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/medialo/gogws/internal/commands/version.Version={{.Version}}
+      - -X github.com/medialo/gogws/internal/commands/version.Commit={{.Commit}}
+
+archives:
+  - formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+
+release:
+  github:
+    owner: medialo
+    name: gogws
