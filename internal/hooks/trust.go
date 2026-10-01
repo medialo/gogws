@@ -2,7 +2,10 @@ package hooks
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,70 +29,133 @@ const (
 	TrustResultRunAndTrust
 )
 
-func IsWorkspaceTrusted(workspacePath string) bool {
-	cfg, err := config.LoadUserConfig()
-	if err != nil {
-		return false
-	}
+type TrustState int
 
-	absPath, err := filepath.Abs(workspacePath)
-	if err != nil {
-		return false
-	}
+const (
+	TrustStateTrusted TrustState = iota
+	TrustStateNew
+	TrustStateModified
+)
 
-	for _, pattern := range cfg.TrustedWorkspaces {
-		if matchPattern(pattern, absPath) {
-			return true
-		}
+func (s TrustState) String() string {
+	switch s {
+	case TrustStateTrusted:
+		return "trusted"
+	case TrustStateModified:
+		return "modified since it was trusted"
+	default:
+		return "new, never trusted"
 	}
-
-	return false
 }
 
-func matchPattern(pattern, path string) bool {
-	if strings.HasSuffix(pattern, "/**") {
-		prefix := strings.TrimSuffix(pattern, "/**")
-		return strings.HasPrefix(path, prefix)
-	}
+var (
+	promptInput  io.Reader = os.Stdin
+	promptReader *bufio.Reader
+	promptSource io.Reader
+)
 
-	if strings.HasSuffix(pattern, "/*") {
-		prefix := strings.TrimSuffix(pattern, "/*")
-		if !strings.HasPrefix(path, prefix) {
-			return false
-		}
-		remaining := strings.TrimPrefix(path, prefix)
-		remaining = strings.TrimPrefix(remaining, "/")
-		return !strings.Contains(remaining, "/")
+func readPromptLine() (string, error) {
+	if promptReader == nil || promptSource != promptInput {
+		promptReader = bufio.NewReader(promptInput)
+		promptSource = promptInput
 	}
-
-	if strings.Contains(pattern, "*") {
-		matched, _ := filepath.Match(pattern, path)
-		return matched
-	}
-
-	return pattern == path
+	return promptReader.ReadString('\n')
 }
 
-func PromptTrust(hookName, hookPath, workspacePath string) TrustResult {
-	fmt.Printf("\n[hook:local] Hook '%s' found at: %s\n", hookName, hookPath)
+func fileSHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func HookTrustState(hookPath string) (TrustState, string, error) {
+	absPath, err := filepath.Abs(hookPath)
+	if err != nil {
+		return TrustStateNew, "", err
+	}
+	sum, err := fileSHA256(absPath)
+	if err != nil {
+		return TrustStateNew, "", err
+	}
+	trusted, ok := config.FindTrustedHook(absPath)
+	switch {
+	case !ok:
+		return TrustStateNew, sum, nil
+	case trusted.SHA256 != sum:
+		return TrustStateModified, sum, nil
+	default:
+		return TrustStateTrusted, sum, nil
+	}
+}
+
+func TrustHookFile(hookPath, sum string) error {
+	absPath, err := filepath.Abs(hookPath)
+	if err != nil {
+		return err
+	}
+	return config.TrustHook(absPath, sum)
+}
+
+func approve(hook *HookInfo, workspaceRoot string) (bool, error) {
+	if hook.Origin == OriginGlobal {
+		return true, nil
+	}
+
+	state, sum, err := HookTrustState(hook.Path)
+	if err != nil {
+		return false, err
+	}
+	if state == TrustStateTrusted {
+		hook.Trusted = true
+		return true, nil
+	}
+
+	switch globalTrustMode {
+	case TrustModeSkip:
+		fmt.Printf("[hook:%s] Skipping untrusted hook (%s): %s\n", hook.Origin, state, hook.Path)
+		return false, nil
+	case TrustModeAll:
+		return true, nil
+	}
+
+	switch PromptTrust(hook, workspaceRoot, state) {
+	case TrustResultSkip:
+		fmt.Printf("[hook:%s] Skipped by user: %s\n", hook.Origin, hook.Path)
+		return false, nil
+	case TrustResultRunAndTrust:
+		if err := TrustHookFile(hook.Path, sum); err != nil {
+			fmt.Printf("Warning: failed to trust hook file: %v\n", err)
+		} else {
+			hook.Trusted = true
+		}
+	}
+	return true, nil
+}
+
+func PromptTrust(hook *HookInfo, workspacePath string, state TrustState) TrustResult {
+	fmt.Printf("\n[hook:%s] Hook '%s' found at: %s\n", hook.Origin, hook.Name, hook.Path)
 	fmt.Printf("Workspace: %s\n", workspacePath)
-	fmt.Println("This workspace is not in your trusted list.")
+	fmt.Printf("This hook file is %s.\n", state)
 	fmt.Println()
 	fmt.Println("Options:")
-	fmt.Println("  [r] Run this hook")
+	fmt.Println("  [r] Run this hook once")
 	fmt.Println("  [s] Skip this hook")
-	fmt.Println("  [t] Run and add workspace to trusted list")
+	fmt.Println("  [t] Run and trust this file (asked again if it changes)")
 	fmt.Print("Choose [r/s/t]: ")
 
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil {
+	input, err := readPromptLine()
+	if err != nil && input == "" {
 		return TrustResultSkip
 	}
 
-	input = strings.TrimSpace(strings.ToLower(input))
-
-	switch input {
+	switch strings.TrimSpace(strings.ToLower(input)) {
 	case "r", "run":
 		return TrustResultRun
 	case "t", "trust":
@@ -97,14 +163,6 @@ func PromptTrust(hookName, hookPath, workspacePath string) TrustResult {
 	default:
 		return TrustResultSkip
 	}
-}
-
-func AddToTrusted(workspacePath string) error {
-	absPath, err := filepath.Abs(workspacePath)
-	if err != nil {
-		return err
-	}
-	return config.AddTrustedWorkspace(absPath)
 }
 
 func ParseTrustMode(s string) TrustMode {

@@ -129,7 +129,12 @@ func runUpdate(getConfig func() *config.Config) error {
 				didClone = true
 				lipgloss.Println(renderer.RenderInfo(fmt.Sprintf("Cloning %d missing projects...", len(missingProjects))))
 
-				result := cloneProjects(cfg.WorkspaceRoot, missingProjects, cfg.Parallel, cfg.StopOnError, cfg.IsInteractive)
+				projectHooks, err := hooks.PrepareProjectHooks(ws, hooks.ProjectHooksOptions{Command: "update", Pre: hooks.HookPreClone, Post: hooks.HookPostClone, PerRepoWorkspace: true})
+				if err != nil {
+					return fmt.Errorf("failed to prepare hooks: %w", err)
+				}
+
+				result := cloneProjects(projectHooks, missingProjects, cfg.Parallel, cfg.StopOnError, cfg.IsInteractive)
 				if !cfg.IsInteractive {
 					renderSummary(renderer, result, "Cloned projects")
 				}
@@ -312,7 +317,7 @@ func cloneWorkspaces(workspaceRoot string, toClone []*gws2.Workspace, parallel i
 	return runJobs(jobs, parallel, stopOnError, isInteractive)
 }
 
-func cloneProjects(workspaceRoot string, toClone []*gws2.Project, maxParallel int, stopOnError bool, isInteractive bool) *engine.ExecutionResult {
+func cloneProjects(projectHooks *hooks.ProjectHooks, toClone []*gws2.Project, maxParallel int, stopOnError bool, isInteractive bool) *engine.ExecutionResult {
 	if len(toClone) == 0 {
 		return engine.NewNoExecutionResult()
 	}
@@ -323,7 +328,9 @@ func cloneProjects(workspaceRoot string, toClone []*gws2.Project, maxParallel in
 		jobs = append(jobs, engine.Job{
 			JobNameId: p.GetPath(),
 			Fn: func(ctx context.Context, notify engine.Notify) error {
-				return git.Clone(ctx, p.GetOriginRemote(), p.GetPath(), engine.WrapRunner(notify))
+				return projectHooks.Around(ctx, p, notify, func() error {
+					return git.Clone(ctx, p.GetOriginRemote(), p.GetPath(), engine.WrapRunner(notify))
+				})
 			},
 		})
 	}

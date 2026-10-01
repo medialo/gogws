@@ -53,6 +53,11 @@ func runFF(getConfig func() *config.Config) error {
 		return item.FolderExist() && item.IsGitRepository()
 	})
 
+	projectHooks, err := hooks.PrepareProjectHooks(ws, hooks.ProjectHooksOptions{Command: "ff", Pre: hooks.HookPreFF, Post: hooks.HookPostFF})
+	if err != nil {
+		return fmt.Errorf("failed to prepare project hooks: %w", err)
+	}
+
 	jobs := make([]engine.Job, 0, len(projectList))
 	var skippedJobs []engine.JobResult
 
@@ -73,9 +78,10 @@ func runFF(getConfig func() *config.Config) error {
 					return nil
 				}
 
-				notify(engine.EventJobLog, "Fast-forwarding...")
-
-				return engine.Wrap(git.Pull(p.GetPath()).AsCmd()).Run(ctx, notify)
+				return projectHooks.Around(ctx, p, notify, func() error {
+					notify(engine.EventJobLog, "Fast-forwarding...")
+					return engine.Wrap(git.Pull(p.GetPath()).AsCmd()).Run(ctx, notify)
+				})
 			},
 		})
 	}

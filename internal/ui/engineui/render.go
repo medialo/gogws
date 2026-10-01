@@ -22,6 +22,7 @@ const (
 type WorkerState struct {
 	Status  WorkerStatus
 	JobId   string
+	Phase   string
 	LastLog string
 	Spinner spinner.Model
 }
@@ -109,6 +110,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.workers[workerID].JobId = event.JobNameId
 				m.workers[workerID].LastLog = "starting..."
 
+			case engine.EventJobPhase:
+				m.workers[workerID].Phase = event.Log
+				if event.Log != "" {
+					m.workers[workerID].LastLog = ""
+				}
+
 			case engine.EventJobLog:
 				m.workers[workerID].LastLog = event.Log
 
@@ -125,6 +132,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.done++
 				m.workers[workerID].Status = WorkerIdle
 				m.workers[workerID].JobId = ""
+				m.workers[workerID].Phase = ""
 				m.workers[workerID].LastLog = ""
 			}
 		}
@@ -193,6 +201,18 @@ func (m Model) View() tea.View {
 			log := w.LastLog
 			if len(log) > 60 {
 				log = log[:57] + "..."
+			}
+			if w.Phase != "" {
+				b.WriteString(fmt.Sprintf("  %s [%d] %s %s\n",
+					w.Spinner.View(),
+					i,
+					m.styles.Path.Render(w.JobId),
+					m.styles.Warning.Render("⚙ "+w.Phase),
+				))
+				if log != "" {
+					b.WriteString(fmt.Sprintf("        %s\n", m.styles.Muted.Render(log)))
+				}
+				continue
 			}
 			b.WriteString(fmt.Sprintf("  %s [%d] %s %s\n",
 				w.Spinner.View(),

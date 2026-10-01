@@ -143,7 +143,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 		switch key {
 		case "trusted-workspaces":
 			lipgloss.Printf("    type: list of paths\n")
-			lipgloss.Printf("    desc: Workspace paths where local hooks are trusted\n")
+			lipgloss.Printf("    desc: Deprecated, no longer grants trust. Local hooks are trusted per file (path + sha256) in ~/.gws/%s\n", config.TrustedHooksFile)
 		}
 		lipgloss.Println()
 	}

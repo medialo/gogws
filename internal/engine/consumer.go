@@ -9,6 +9,10 @@ func ConsumeVerbose(events <-chan Event) {
 		switch e.Type {
 		case EventJobStart:
 			slog.Info("JOB STARTED", "goroutine", e.GoroutineID, "jobId", e.JobNameId)
+		case EventJobPhase:
+			if e.Log != "" {
+				slog.Info("JOB PHASE", "goroutine", e.GoroutineID, "jobId", e.JobNameId, "phase", e.Log)
+			}
 		case EventJobLog:
 			slog.Info("JOB LOG", "goroutine", e.GoroutineID, "jobId", e.JobNameId, "log", e.Log)
 		case EventJobErr:

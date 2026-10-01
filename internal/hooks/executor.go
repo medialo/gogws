@@ -1,13 +1,17 @@
 package hooks
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"sort"
+	"strings"
+	"time"
 
-	"github.com/medialo/gogws/internal/config"
-	"github.com/medialo/gogws/internal/gws2"
+	"charm.land/lipgloss/v2"
+	"github.com/medialo/gogws/internal/ui/styles"
 )
 
 type HookType string
@@ -30,19 +34,30 @@ const (
 type HookOrigin string
 
 const (
-	OriginGlobal HookOrigin = "global"
-	OriginLocal  HookOrigin = "local"
+	OriginGlobal  HookOrigin = "global"
+	OriginLocal   HookOrigin = "local"
+	OriginProject HookOrigin = "project"
 )
 
 type HookInfo struct {
-	Name   HookType
-	Path   string
-	Origin HookOrigin
+	Name    HookType
+	Path    string
+	Origin  HookOrigin
+	Trusted bool
+}
+
+func (h *HookInfo) Label() string {
+	if h.Trusted {
+		return fmt.Sprintf("hook:%s:trusted", h.Origin)
+	}
+	return fmt.Sprintf("hook:%s", h.Origin)
 }
 
 type Context struct {
 	Command       string
 	WorkspaceRoot string
+	ProjectDir    string
+	ProjectName   string
 	Projects      []string
 	Data          map[string]interface{}
 }
@@ -57,31 +72,37 @@ func GetTrustMode() TrustMode {
 	return globalTrustMode
 }
 
-func findHook(hookName HookType, workspaceRoot string) *HookInfo {
-	localHooksDir := filepath.Join(workspaceRoot, gws2.ConfigDirName, gws2.HooksDirName)
-	localHookPath := filepath.Join(localHooksDir, string(hookName))
-
-	if info, err := os.Stat(localHookPath); err == nil && !info.IsDir() {
-		return &HookInfo{
-			Name:   hookName,
-			Path:   localHookPath,
-			Origin: OriginLocal,
-		}
+func hookEnv(ctx Context, hook *HookInfo) []string {
+	env := []string{
+		"GOGWS_COMMAND=" + ctx.Command,
+		"GOGWS_WORKSPACE_DIR=" + ctx.WorkspaceRoot,
+		"GOGWS_WORKSPACE=" + ctx.WorkspaceRoot,
+		"GOGWS_HOOK_NAME=" + string(hook.Name),
+		"GOGWS_HOOK_ORIGIN=" + string(hook.Origin),
 	}
-
-	globalHooksDir, err := config.GetUserHooksDir()
-	if err == nil {
-		globalHookPath := filepath.Join(globalHooksDir, string(hookName))
-		if info, err := os.Stat(globalHookPath); err == nil && !info.IsDir() {
-			return &HookInfo{
-				Name:   hookName,
-				Path:   globalHookPath,
-				Origin: OriginGlobal,
-			}
-		}
+	if ctx.ProjectDir != "" {
+		env = append(env, "GOGWS_PROJECT_DIR="+ctx.ProjectDir, "GOGWS_PROJECT_NAME="+ctx.ProjectName)
 	}
+	if len(ctx.Projects) > 0 {
+		env = append(env, "GOGWS_PROJECTS="+strings.Join(ctx.Projects, "\n"))
+	}
+	keys := make([]string, 0, len(ctx.Data))
+	for k := range ctx.Data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		env = append(env, fmt.Sprintf("GOGWS_%s=%v", strings.ToUpper(k), ctx.Data[k]))
+	}
+	return env
+}
 
-	return nil
+func exitDescription(err error) string {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return fmt.Sprintf("exit %d", exitErr.ExitCode())
+	}
+	return err.Error()
 }
 
 func executeHook(hook *HookInfo, workspaceRoot string, ctx Context) error {
@@ -89,52 +110,42 @@ func executeHook(hook *HookInfo, workspaceRoot string, ctx Context) error {
 		return nil
 	}
 
-	if hook.Origin == OriginLocal {
-		if !IsWorkspaceTrusted(workspaceRoot) {
-			switch globalTrustMode {
-			case TrustModeSkip:
-				fmt.Printf("[hook:%s] Skipping untrusted hook: %s\n", hook.Origin, hook.Name)
-				return nil
-			case TrustModeAll:
-				fmt.Printf("[hook:%s] Running hook (trust-mode=all): %s\n", hook.Origin, hook.Name)
-			case TrustModeAsk:
-				result := PromptTrust(string(hook.Name), hook.Path, workspaceRoot)
-				switch result {
-				case TrustResultSkip:
-					fmt.Printf("[hook:%s] Skipped by user: %s\n", hook.Origin, hook.Name)
-					return nil
-				case TrustResultRunAndTrust:
-					if err := AddToTrusted(workspaceRoot); err != nil {
-						fmt.Printf("Warning: failed to add workspace to trusted list: %v\n", err)
-					} else {
-						fmt.Printf("Workspace added to trusted list\n")
-					}
-				}
-			}
-		} else {
-			fmt.Printf("[hook:%s:trusted] %s\n", hook.Origin, hook.Name)
-		}
-	} else {
-		fmt.Printf("[hook:%s] %s\n", hook.Origin, hook.Name)
+	ok, err := approve(hook, workspaceRoot)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
 	}
 
-	cmd := exec.Command(hook.Path)
-	cmd.Dir = workspaceRoot
-	cmd.Env = append(os.Environ(),
-		fmt.Sprintf("GOGWS_COMMAND=%s", ctx.Command),
-		fmt.Sprintf("GOGWS_WORKSPACE=%s", ctx.WorkspaceRoot),
-		fmt.Sprintf("GOGWS_HOOK_NAME=%s", hook.Name),
-		fmt.Sprintf("GOGWS_HOOK_ORIGIN=%s", hook.Origin),
-	)
+	s := styles.Get()
+	lipgloss.Println(s.Info.Render(fmt.Sprintf("[%s] %s", hook.Label(), hook.Name)) + " " + s.Muted.Render(hook.Path))
 
+	cmd, err := buildCommand(context.Background(), hook, workspaceRoot, hookEnv(ctx, hook))
+	if err != nil {
+		lipgloss.Println(s.Error.Render(fmt.Sprintf("%s %s: %v", s.IconError, hook.Name, err)))
+		return err
+	}
+	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	return cmd.Run()
+	start := time.Now()
+	err = cmd.Run()
+	elapsed := time.Since(start).Round(time.Millisecond)
+	if err != nil {
+		lipgloss.Println(s.Error.Render(fmt.Sprintf("%s %s %s", s.IconError, hook.Name, exitDescription(err))) + " " + s.Muted.Render(elapsed.String()))
+		return err
+	}
+	lipgloss.Println(s.Success.Render(fmt.Sprintf("%s %s", s.IconSuccess, hook.Name)) + " " + s.Muted.Render(elapsed.String()))
+	return nil
 }
 
 func Run(hookName HookType, workspaceRoot string, ctx Context) error {
-	hook := findHook(hookName, workspaceRoot)
+	hook, err := findHook(hookName, workspaceRoot)
+	if err != nil {
+		return err
+	}
 	if hook == nil {
 		return nil
 	}
@@ -168,25 +179,6 @@ func PostUpdate(workspaceRoot string, cloned []string) error {
 		Command:       "update",
 		WorkspaceRoot: workspaceRoot,
 		Projects:      cloned,
-	})
-}
-
-func PreClone(workspaceRoot string, repoPath string) error {
-	return Run(HookPreClone, workspaceRoot, Context{
-		Command:       "clone",
-		WorkspaceRoot: workspaceRoot,
-		Projects:      []string{repoPath},
-	})
-}
-
-func PostClone(workspaceRoot string, repoPath string, success bool) error {
-	return Run(HookPostClone, workspaceRoot, Context{
-		Command:       "clone",
-		WorkspaceRoot: workspaceRoot,
-		Projects:      []string{repoPath},
-		Data: map[string]interface{}{
-			"success": success,
-		},
 	})
 }
 

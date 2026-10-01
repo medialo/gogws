@@ -53,6 +53,11 @@ func runClone(getConfig func() *config.Config, args []string) error {
 	renderer := cli.NewRenderer()
 	isInteractive := term.IsTerminal(int(os.Stdout.Fd()))
 
+	projectHooks, err := hooks.PrepareProjectHooks(ws, hooks.ProjectHooksOptions{Command: "clone", Pre: hooks.HookPreClone, Post: hooks.HookPostClone, PerRepoWorkspace: true})
+	if err != nil {
+		return fmt.Errorf("failed to prepare hooks: %w", err)
+	}
+
 	jobs := make([]engine.Job, 0, len(args))
 	var skipped []string
 
@@ -71,15 +76,12 @@ func runClone(getConfig func() *config.Config, args []string) error {
 			continue
 		}
 
-		if err := hooks.PreClone(cfg.WorkspaceRoot, repoPath); err != nil {
-			lipgloss.Println(renderer.RenderError(fmt.Sprintf("%s: pre-clone hook failed: %v", repoPath, err)))
-			continue
-		}
-
 		jobs = append(jobs, engine.Job{
 			JobNameId: repoPath,
 			Fn: func(ctx context.Context, notify engine.Notify) error {
-				return git.CloneWorkspace(ctx, project.GetOriginRemote(), project.Name, engine.WrapRunner(notify))
+				return projectHooks.Around(ctx, project, notify, func() error {
+					return git.CloneWorkspace(ctx, project.GetOriginRemote(), project.Name, engine.WrapRunner(notify))
+				})
 			},
 		})
 	}
@@ -105,18 +107,6 @@ func runClone(getConfig func() *config.Config, args []string) error {
 
 	execResult := <-resultCh
 
-	for _, label := range execResult.SuccessLabels() {
-		if hookErr := hooks.PostClone(cfg.WorkspaceRoot, label, true); hookErr != nil {
-			lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("%s: post-clone hook failed: %v", label, hookErr)))
-		}
-	}
-
-	for _, label := range execResult.FailedLabels() {
-		if hookErr := hooks.PostClone(cfg.WorkspaceRoot, label, false); hookErr != nil {
-			lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("%s: post-clone hook failed: %v", label, hookErr)))
-		}
-	}
-
 	if !isInteractive {
 		if execResult.HasErrors() {
 			for _, r := range execResult.Failed() {
@@ -124,6 +114,10 @@ func runClone(getConfig func() *config.Config, args []string) error {
 			}
 		}
 		renderer.RenderSuccess(fmt.Sprintf("Cloned %d repositories", execResult.SuccessCount()))
+	}
+
+	if execResult.HasErrors() {
+		return fmt.Errorf("%d repositories failed to clone", execResult.FailedCount())
 	}
 
 	return nil

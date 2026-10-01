@@ -9,6 +9,7 @@ const (
 	EventJobEnd
 	EventJobSkipped
 	EventSlog // todo fusionner le slog et le log ?
+	EventJobPhase
 )
 
 func (e EventType) String() string {
@@ -23,6 +24,8 @@ func (e EventType) String() string {
 		return "JOB_END"
 	case EventJobSkipped:
 		return "JOB_SKIPPED"
+	case EventJobPhase:
+		return "JOB_PHASE"
 	default:
 		return "UNKNOWN"
 	}

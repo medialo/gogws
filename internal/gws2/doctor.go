@@ -3,13 +3,19 @@ package gws2
 import (
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strconv"
+	"strings"
+
+	"github.com/medialo/gogws/internal/hookfile"
+	"github.com/samber/lo"
 )
 
 //go:generate enumer -type=DoctorCheckId
 const (
 	DuplicateWorkspace DoctorCheckId = iota
 	DuplicateProject
+	HookConflict
 )
 
 type DoctorCheckId int
@@ -20,6 +26,8 @@ type DoctorCheck struct {
 	AutoFix     bool   `json:"auto_fix"` // AutoFix indicates whether the rule needs some interactivity to fix the issue
 	test        func(w *Workspace) CheckResult
 	Fix         func(w *Workspace) error
+	Explain     func(w *Workspace) []string
+	SkipOnLoad  bool
 }
 
 var DoctorRules = map[DoctorCheckId]DoctorCheck{
@@ -37,6 +45,49 @@ var DoctorRules = map[DoctorCheckId]DoctorCheck{
 		Fix:         fixDuplicateProjects,
 		AutoFix:     true,
 	},
+	HookConflict: {
+		Name:        "HookConflict",
+		Description: "Several hook files for the same project, hook and OS",
+		test: func(w *Workspace) CheckResult {
+			if len(hookConflicts(w)) > 0 {
+				return Failed
+			}
+			return Passed
+		},
+		Explain:    explainHookConflicts,
+		SkipOnLoad: true,
+	},
+}
+
+func hookConflicts(w *Workspace) []hookfile.Conflict {
+	base := filepath.Join(w.AbsolutePath, ConfigDirName, HooksDirName)
+	dirs := append([]string{base}, lo.Map(hookfile.OSDirs, func(os string, _ int) string { return filepath.Join(base, os) })...)
+	var conflicts []hookfile.Conflict
+	for _, dir := range dirs {
+		files, err := hookfile.Scan(dir)
+		if err != nil {
+			slog.Warn("Cannot scan hooks directory", "dir", dir, "error", err)
+			continue
+		}
+		conflicts = append(conflicts, hookfile.Conflicts(dir, files)...)
+	}
+	return conflicts
+}
+
+func explainHookConflicts(w *Workspace) []string {
+	base := filepath.Join(w.AbsolutePath, ConfigDirName, HooksDirName)
+	var lines []string
+	for _, c := range hookConflicts(w) {
+		dir, err := filepath.Rel(base, c.Dir)
+		if err != nil || dir == "." {
+			dir = ""
+		} else {
+			dir = filepath.ToSlash(dir) + "/"
+		}
+		names := lo.Map(c.Files, func(f string, _ int) string { return filepath.Base(f) })
+		lines = append(lines, fmt.Sprintf("%s%s: %s", dir, c.Key, strings.Join(names, ", ")))
+	}
+	return lines
 }
 
 type CheckResult int
@@ -155,6 +206,9 @@ func (w *Workspace) IsValid() bool {
 
 	rulesState := DoctorCheckResults{}
 	for id, rule := range DoctorRules {
+		if rule.SkipOnLoad {
+			continue
+		}
 		rulesState[id] = rule.test(w)
 	}
 

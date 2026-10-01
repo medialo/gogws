@@ -48,6 +48,11 @@ func runFetch(getConfig func() *config.Config) error {
 		return fmt.Errorf("failed to load projects: %w", err)
 	}
 
+	projectHooks, err := hooks.PrepareProjectHooks(ws, hooks.ProjectHooksOptions{Command: "fetch", Pre: hooks.HookPreFetch, Post: hooks.HookPostFetch})
+	if err != nil {
+		return fmt.Errorf("failed to prepare project hooks: %w", err)
+	}
+
 	jobs := make([]engine.Job, 0, len(ws.Projects))
 	var skippedJobs []engine.JobResult
 
@@ -63,8 +68,10 @@ func runFetch(getConfig func() *config.Config) error {
 					ctx.Done()
 					return nil
 				}
-				notify(engine.EventJobLog, "Fetching...")
-				return engine.Wrap(git.Fetch(repoPath).AsCmd()).Run(ctx, notify)
+				return projectHooks.Around(ctx, p, notify, func() error {
+					notify(engine.EventJobLog, "Fetching...")
+					return engine.Wrap(git.Fetch(repoPath).AsCmd()).Run(ctx, notify)
+				})
 			},
 		})
 	}

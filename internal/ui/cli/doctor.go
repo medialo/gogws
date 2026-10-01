@@ -46,6 +46,11 @@ func (r *Renderer) RenderDoctorRun(root *gws2.Workspace, results []gws2.Workspac
 			case gws2.Failed:
 				icon := r.theme.Error.Render(r.theme.Icons.Error)
 				t.Row(icon, label, id.String(), fail, "")
+				if explain := gws2.DoctorRules[id].Explain; explain != nil {
+					for _, line := range explain(wr.Workspace) {
+						t.Row("", "", r.theme.Subtle.Render("  "+line), "", "")
+					}
+				}
 			case gws2.Fixed:
 				icon := r.theme.Success.Render(r.theme.Icons.Success)
 				t.Row(icon, label, id.String(), pass, r.theme.Warning.Render("(fixed)"))

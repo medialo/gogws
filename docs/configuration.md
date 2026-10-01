@@ -163,7 +163,9 @@ trusted-workspaces:
 
 ### trusted-workspaces
 
-List of workspace paths where local hooks are automatically trusted.
+> **Deprecated:** this list no longer grants trust to hooks. Local and project hooks are now trusted per file (path + SHA-256) in `~/.gws/trusted-hooks.yaml`, see [Hooks](hooks.md#per-file-trust).
+
+List of workspace paths where local hooks were automatically trusted.
 
 **Wildcard patterns:**
 - `*` — Matches one directory level

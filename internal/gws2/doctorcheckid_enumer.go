@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _DoctorCheckIdName = "DuplicateWorkspaceDuplicateProject"
+const _DoctorCheckIdName = "DuplicateWorkspaceDuplicateProjectHookConflict"
 
-var _DoctorCheckIdIndex = [...]uint8{0, 18, 34}
+var _DoctorCheckIdIndex = [...]uint8{0, 18, 34, 46}
 
-const _DoctorCheckIdLowerName = "duplicateworkspaceduplicateproject"
+const _DoctorCheckIdLowerName = "duplicateworkspaceduplicateprojecthookconflict"
 
 func (i DoctorCheckId) String() string {
 	if i < 0 || i >= DoctorCheckId(len(_DoctorCheckIdIndex)-1) {
@@ -26,20 +26,24 @@ func _DoctorCheckIdNoOp() {
 	var x [1]struct{}
 	_ = x[DuplicateWorkspace-(0)]
 	_ = x[DuplicateProject-(1)]
+	_ = x[HookConflict-(2)]
 }
 
-var _DoctorCheckIdValues = []DoctorCheckId{DuplicateWorkspace, DuplicateProject}
+var _DoctorCheckIdValues = []DoctorCheckId{DuplicateWorkspace, DuplicateProject, HookConflict}
 
 var _DoctorCheckIdNameToValueMap = map[string]DoctorCheckId{
 	_DoctorCheckIdName[0:18]:       DuplicateWorkspace,
 	_DoctorCheckIdLowerName[0:18]:  DuplicateWorkspace,
 	_DoctorCheckIdName[18:34]:      DuplicateProject,
 	_DoctorCheckIdLowerName[18:34]: DuplicateProject,
+	_DoctorCheckIdName[34:46]:      HookConflict,
+	_DoctorCheckIdLowerName[34:46]: HookConflict,
 }
 
 var _DoctorCheckIdNames = []string{
 	_DoctorCheckIdName[0:18],
 	_DoctorCheckIdName[18:34],
+	_DoctorCheckIdName[34:46],
 }
 
 // DoctorCheckIdString retrieves an enum value from the enum constants string name.
