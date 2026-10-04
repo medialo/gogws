@@ -15,7 +15,7 @@ import (
 
 var autoCloneProject bool
 
-func newAddProjectCommand(getConfig func() *config.Config) *cobra.Command {
+func newAddProjectCommand(getConfig func() *config.RunContext) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "project [git url] [foldername]",
 		Short: "Add a project to the current workspace",
@@ -30,7 +30,7 @@ func newAddProjectCommand(getConfig func() *config.Config) *cobra.Command {
 	return cmd
 }
 
-func runAddProject(getConfig func() *config.Config, args []string) error {
+func runAddProject(getConfig func() *config.RunContext, args []string) error {
 	cfg := getConfig()
 	if cfg == nil {
 		return fmt.Errorf("no workspace found (no .projects.gws file)")

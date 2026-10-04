@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewCommand(getConfig func() *config.Config) *cobra.Command {
+func NewCommand(getConfig func() *config.RunContext) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add repositories to gws file",

@@ -23,7 +23,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewCommand(getConfig func() *config.Config) *cobra.Command {
+func NewCommand(getConfig func() *config.RunContext) *cobra.Command {
 	return &cobra.Command{
 		Use:     "status",
 		Aliases: []string{"st"},
@@ -36,7 +36,7 @@ Shows uncommitted changes, untracked files, and sync status with remotes.`,
 	}
 }
 
-func runStatus(getConfig func() *config.Config) error {
+func runStatus(getConfig func() *config.RunContext) error {
 	cfg := getConfig()
 	if cfg == nil {
 		return fmt.Errorf("no workspace found (no .projects.gws file)")

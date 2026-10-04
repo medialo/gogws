@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewDoctorCommand(getConfig func() *config.Config) *cobra.Command {
+func NewDoctorCommand(getConfig func() *config.RunContext) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "doctor",
 		Aliases: []string{"doc", "aie", "bobo"},

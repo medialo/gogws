@@ -23,7 +23,7 @@ var (
 	resetProjectsGwsFile bool
 )
 
-func newProjectsCommand(getConfig func() *config.Config) *cobra.Command {
+func newProjectsCommand(getConfig func() *config.RunContext) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "projects",
 		Short: "Discover git repositories and create projects.gws",
@@ -48,7 +48,7 @@ By default, also generates a .gitignore file configured for GWS workspaces.`,
 	return cmd
 }
 
-func preRunInitProjects(getConfig func() *config.Config) error {
+func preRunInitProjects(getConfig func() *config.RunContext) error {
 	if resetProjectsGwsFile {
 		cfg := getConfig()
 		if cfg == nil {
@@ -71,7 +71,7 @@ func preRunInitProjects(getConfig func() *config.Config) error {
 	return nil
 }
 
-func postRunInitProjects(getConfig func() *config.Config) error {
+func postRunInitProjects(getConfig func() *config.RunContext) error {
 	if !ignoreGitIgnoreGeneration {
 		workspaceRoot, err := os.Getwd()
 		if err != nil {

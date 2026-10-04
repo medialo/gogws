@@ -4,28 +4,23 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strconv"
 
 	"github.com/medialo/gogws/internal/config"
+	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/hooks"
 	"github.com/medialo/gogws/internal/log"
+	"github.com/medialo/gogws/internal/theme"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
 	cfgFile     string
-	themeFile   string
-	parallel    int
-	format      string
-	noColor     bool
 	onlyChanges bool
 	verbosity   int
 	trustHooks  string
-	stopOnError bool
 	workingDir  string
 )
 
@@ -43,27 +38,38 @@ Compatible with gws project files (.projects.gws)`,
 func persistentPreRun(cmd *cobra.Command, _ []string) error {
 	log.SetVerbose(verbosity)
 	slog.Debug("Running PersistentPreRunE", "command", "root")
-	noColor = noColor || viper.GetBool("no_color")
-	if noColor {
+	hooks.SetTrustMode(hooks.ParseTrustMode(trustHooks))
+
+	isConfigCmd := cmd.Name() == "config" || (cmd.Parent() != nil && cmd.Parent().Name() == "config")
+
+	prefs, err := config.LoadPreferences(cmd.Flags(), cfgFile)
+	if err != nil {
+		if isConfigCmd {
+			slog.Warn(err.Error())
+			return nil
+		}
+		return err
+	}
+
+	if prefs.NoColor.Value {
 		os.Setenv("NO_COLOR", "1")
 		lipgloss.Writer.Profile = colorprofile.Ascii
 	}
-	hooks.SetTrustMode(hooks.ParseTrustMode(trustHooks))
 
-	if parallel < 0 {
-		return fmt.Errorf("parallel \"" + strconv.Itoa(parallel) + "\" is invalid. Must be greater than or equal to 0")
+	if prefs.Theme.Value != "" {
+		t, err := theme.LoadThemeFromFile(prefs.Theme.Value)
+		if err != nil {
+			slog.Warn("Using default theme", "error", err)
+		}
+		theme.SetTheme(t)
 	}
 
-	if cmd.Name() == "config" {
+	if isConfigCmd {
 		return nil
 	}
 
-	if err := config.Initialize(); err != nil {
-		slog.Debug(fmt.Sprintf("Config initialization skipped: %v", err))
-	}
-
-	if config.IsInitialized() {
-		config.ApplyFlags(themeFile, parallel, format, noColor, onlyChanges, stopOnError, workingDir)
+	if err := config.Initialize(prefs, onlyChanges, workingDir); err != nil {
+		slog.Debug(fmt.Sprintf("Run context initialization skipped: %v", err))
 	}
 
 	onStopProfiling = profilingInit()
@@ -72,58 +78,25 @@ func persistentPreRun(cmd *cobra.Command, _ []string) error {
 }
 
 func NewCommand() *cobra.Command {
-	cobra.OnInitialize(initConfig)
-
 	cobra.EnableTraverseRunHooks = true
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: $HOME/.config/gogws/config.yaml)")
-	rootCmd.PersistentFlags().StringVar(&themeFile, "theme", "", "theme file")
-	rootCmd.PersistentFlags().IntVar(&parallel, "parallel", 0, "number of parallel operations (default: 5)")
-	rootCmd.PersistentFlags().StringVar(&format, "format", "text", "output format (text, json, yaml)")
-	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "disable colored output")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: $HOME/.gws/config.yaml)")
+	rootCmd.PersistentFlags().String(config.KeyTheme, "", "theme file")
+	rootCmd.PersistentFlags().Int(config.KeyParallel, gws2.DefaultParallel, "number of parallel operations")
+	rootCmd.PersistentFlags().String(config.KeyFormat, config.DefaultFormat, "output format (text, json, yaml)")
+	rootCmd.PersistentFlags().Bool(config.KeyNoColor, false, "disable colored output")
 	rootCmd.PersistentFlags().BoolVarP(&onlyChanges, "only-changes", "c", false, "show only repositories with changes")
 	rootCmd.PersistentFlags().CountVarP(&verbosity, "verbose", "v", "enable verbose output")
 	rootCmd.PersistentFlags().StringVar(&trustHooks, "trust-hooks", "ask", "trust mode for local hooks: ask, all, skip")
-	rootCmd.PersistentFlags().BoolVar(&stopOnError, "stop-on-error", false, "stop execution on first error")
+	rootCmd.PersistentFlags().Bool(config.KeyStopOnError, false, "stop execution on first error")
 	rootCmd.PersistentFlags().StringVarP(&workingDir, "working-dir", "D", "", "set working directory for the command. If not set the current directory is used")
 
 	// profiling
 	applyProfilingFlags(rootCmd)
 
-	viper.BindPFlag("theme", rootCmd.PersistentFlags().Lookup("theme"))
-	viper.BindPFlag("parallel", rootCmd.PersistentFlags().Lookup("parallel"))
-	viper.BindPFlag("format", rootCmd.PersistentFlags().Lookup("format"))
-	viper.BindPFlag("no_color", rootCmd.PersistentFlags().Lookup("no-color"))
-	viper.BindPFlag("working_dir", rootCmd.PersistentFlags().Lookup("working-dir"))
-
 	return rootCmd
 }
 
-func GetConfig() *config.Config {
-	return config.GetConfig()
-}
-
-func initConfig() {
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	} else {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		viper.AddConfigPath(home + "/.config/gogws")
-		viper.SetConfigName("config")
-		viper.SetConfigType("yaml")
-	}
-
-	viper.SetEnvPrefix("GOGWS")
-	viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err == nil {
-		if viper.GetBool("verbose") {
-			fmt.Println("Using config file:", viper.ConfigFileUsed())
-		}
-	}
+func GetRunContext() *config.RunContext {
+	return config.GetRunContext()
 }

@@ -20,7 +20,7 @@ var (
 	folderWorkspace    bool
 )
 
-func newAddWorkspaceCommand(getConfig func() *config.Config) *cobra.Command {
+func newAddWorkspaceCommand(getConfig func() *config.RunContext) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "workspace [git url] [foldername]",
 		Short: "Add a workspace to the current workspace",
@@ -36,7 +36,7 @@ func newAddWorkspaceCommand(getConfig func() *config.Config) *cobra.Command {
 	return cmd
 }
 
-func runAddWorkspace(getConfig func() *config.Config, args []string) error {
+func runAddWorkspace(getConfig func() *config.RunContext, args []string) error {
 	cfg := getConfig()
 	if cfg == nil {
 		return fmt.Errorf("no workspace found (no .projects.gws file)")

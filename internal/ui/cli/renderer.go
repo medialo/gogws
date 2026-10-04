@@ -136,8 +136,11 @@ func (r *Renderer) Theme() theme.Theme {
 
 func (r *Renderer) RenderConfigValue(key string, value interface{}, source string) string {
 	sourceStyle := r.theme.Subtle
-	if source == "env" {
+	switch source {
+	case "env":
 		sourceStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Italic(true)
+	case "flag":
+		sourceStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Italic(true)
 	}
 
 	return fmt.Sprintf("  %s: %s  %s",

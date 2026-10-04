@@ -19,7 +19,7 @@ import (
 var checkFlagShowKnown bool
 var checkFlagShowPath bool
 
-func NewCommand(getConfig func() *config.Config) *cobra.Command {
+func NewCommand(getConfig func() *config.RunContext) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check",
 		Short: "Check workspace consistency",
@@ -36,7 +36,7 @@ This can be slow for large workspaces.`,
 	return cmd
 }
 
-func runCheck(getConfig func() *config.Config) error {
+func runCheck(getConfig func() *config.RunContext) error {
 	cfg := getConfig()
 	if cfg == nil {
 		return fmt.Errorf("no workspace found (no .projects.gws file)")

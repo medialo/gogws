@@ -23,7 +23,7 @@ var (
 	resetWorkspacesGwsFile bool
 )
 
-func newWorkspacesCommand(getConfig func() *config.Config) *cobra.Command {
+func newWorkspacesCommand(getConfig func() *config.RunContext) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "workspaces",
 		Short: "Interactively configure sub-workspaces",
@@ -45,7 +45,7 @@ Creates a .gws/workspaces.gws file with the configured workspaces.`,
 	return cmd
 }
 
-func preRunInitWorkspaces(getConfig func() *config.Config) error {
+func preRunInitWorkspaces(getConfig func() *config.RunContext) error {
 	if resetWorkspacesGwsFile {
 		cfg := getConfig()
 		if cfg == nil {

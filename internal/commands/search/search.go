@@ -22,7 +22,7 @@ var (
 	printFullSearchScriptInit bool
 )
 
-func NewCommand(getConfig func() *config.Config) *cobra.Command {
+func NewCommand(getConfig func() *config.RunContext) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "search <query>",
 		Aliases: []string{"find"},
@@ -73,7 +73,7 @@ Use --alias to name the generated function something other than "gcd"
 	return cmd
 }
 
-func runSearch(getConfig func() *config.Config, query string) error {
+func runSearch(getConfig func() *config.RunContext, query string) error {
 	cfg := getConfig()
 	if cfg == nil {
 		return fmt.Errorf("no workspace found (no .projects.gws file)")

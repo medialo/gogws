@@ -22,7 +22,7 @@ import (
 	"golang.org/x/term"
 )
 
-func NewCommand(getConfig func() *config.Config) *cobra.Command {
+func NewCommand(getConfig func() *config.RunContext) *cobra.Command {
 	return &cobra.Command{
 		Use:   "clone [repository...]",
 		Short: "Clone specific repositories",
@@ -34,7 +34,7 @@ func NewCommand(getConfig func() *config.Config) *cobra.Command {
 	}
 }
 
-func runClone(getConfig func() *config.Config, args []string) error {
+func runClone(getConfig func() *config.RunContext, args []string) error {
 	cfg := getConfig()
 	if cfg == nil {
 		return fmt.Errorf("no workspace found (no .projects.gws file)")

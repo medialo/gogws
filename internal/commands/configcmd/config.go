@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
@@ -17,8 +16,10 @@ func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Manage gogws configuration",
-		Long:  `View and manage gogws user configuration stored in ~/.gws/config.yaml`,
-		RunE:  runConfigShow,
+		Long: `View and manage gogws user configuration stored in ~/.gws/config.yaml.
+
+Each value is resolved in this order: flag > environment variable (GOGWS_*) > config file > default.`,
+		RunE: runConfigShow,
 	}
 
 	cmd.AddCommand(newGetCommand())
@@ -32,7 +33,7 @@ func newGetCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <key>",
 		Short: "Get a configuration value",
-		Long:  `Get a specific configuration value by key.`,
+		Long:  `Get the effective value of a configuration key and where it comes from.`,
 		Args:  cobra.ExactArgs(1),
 		RunE:  runConfigGet,
 	}
@@ -42,11 +43,9 @@ func newSetCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "set <key> <value>",
 		Short: "Set a configuration value",
-		Long: `Set a configuration value.
+		Long: `Set a configuration value in ~/.gws/config.yaml.
 
-Available keys:
-  provider-cache-ttl    How long a discovered provider workspace is kept before --refresh-providers re-reads it (e.g. 12h)
-  trusted-workspaces    Deprecated, no longer grants trust to hooks`,
+Run "gogws config list" to see the available keys.`,
 		Args: cobra.ExactArgs(2),
 		RunE: runConfigSet,
 	}
@@ -60,15 +59,70 @@ func newListCommand() *cobra.Command {
 	}
 }
 
+func loadPreferences(cmd *cobra.Command) (*config.Preferences, error) {
+	configFile, _ := cmd.Flags().GetString("config")
+	prefs, err := config.LoadPreferences(cmd.Flags(), configFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
+	}
+	return prefs, nil
+}
+
+func unknownKeyError(key string) error {
+	names := make([]string, 0, len(config.PreferenceKeys))
+	for _, k := range config.PreferenceKeys {
+		names = append(names, k.Name)
+	}
+	return fmt.Errorf("unknown configuration key: %s\n\nAvailable keys:\n  %s", key, strings.Join(names, "\n  "))
+}
+
+func displayValue(prefs *config.Preferences, key string) (any, config.ConfigSource, bool) {
+	switch key {
+	case config.KeyParallel:
+		return prefs.Parallel.Value, prefs.Parallel.Source, true
+	case config.KeyFormat:
+		return prefs.Format.Value, prefs.Format.Source, true
+	case config.KeyTheme:
+		return formatValue(prefs.Theme.Value), prefs.Theme.Source, true
+	case config.KeyNoColor:
+		return prefs.NoColor.Value, prefs.NoColor.Source, true
+	case config.KeyStopOnError:
+		return prefs.StopOnError.Value, prefs.StopOnError.Source, true
+	case config.KeyProviderCacheTTL:
+		return prefs.ProviderCacheTTL.Value, prefs.ProviderCacheTTL.Source, true
+	case config.KeyTrustedWorkspaces:
+		return formatValue(prefs.TrustedWorkspaces.Value), prefs.TrustedWorkspaces.Source, true
+	default:
+		return nil, "", false
+	}
+}
+
+func formatValue(value any) any {
+	switch v := value.(type) {
+	case string:
+		if v == "" {
+			return "(none)"
+		}
+	case []string:
+		if len(v) == 0 {
+			return "(none)"
+		}
+	}
+	return value
+}
+
 func runConfigShow(cmd *cobra.Command, args []string) error {
 	slog.Debug("Loading user configuration...")
 
-	resolved, err := config.LoadUserConfigResolved()
+	prefs, err := loadPreferences(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to load user config: %w", err)
+		return err
 	}
 
-	configPath, _ := config.GetUserConfigPath()
+	configPath, _ := cmd.Flags().GetString("config")
+	if configPath == "" {
+		configPath, _ = config.GetUserConfigPath()
+	}
 
 	renderer := cli.NewRenderer()
 
@@ -76,12 +130,10 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 	lipgloss.Println()
 	lipgloss.Printf("  File: %s\n\n", configPath)
 
-	if len(resolved.TrustedWorkspaces.Value) > 0 {
-		lipgloss.Println(renderer.RenderConfigValue("trusted-workspaces", resolved.TrustedWorkspaces.Value, string(resolved.TrustedWorkspaces.Source)))
-	} else {
-		lipgloss.Println(renderer.RenderConfigValue("trusted-workspaces", "(none)", string(resolved.TrustedWorkspaces.Source)))
+	for _, k := range config.PreferenceKeys {
+		value, source, _ := displayValue(prefs, k.Name)
+		lipgloss.Println(renderer.RenderConfigValue(k.Name, value, string(source)))
 	}
-	lipgloss.Println(renderer.RenderConfigValue("provider-cache-ttl", resolved.ProviderCacheTTL.Value, string(resolved.ProviderCacheTTL.Source)))
 
 	return nil
 }
@@ -90,28 +142,25 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 	key := args[0]
 	slog.Debug("Getting config value", "key", key)
 
-	resolved, err := config.LoadUserConfigResolved()
+	prefs, err := loadPreferences(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
-	switch key {
-	case "trusted-workspaces":
-		if len(resolved.TrustedWorkspaces.Value) == 0 {
-			lipgloss.Printf("(none) (source: %s)\n", resolved.TrustedWorkspaces.Source)
-		} else {
-			lipgloss.Printf("(source: %s)\n", resolved.TrustedWorkspaces.Source)
-			for _, ws := range resolved.TrustedWorkspaces.Value {
-				lipgloss.Printf("  - %s\n", ws)
-			}
+	value, source, ok := displayValue(prefs, key)
+	if !ok {
+		return unknownKeyError(key)
+	}
+
+	if list, isList := value.([]string); isList {
+		lipgloss.Printf("(source: %s)\n", source)
+		for _, item := range list {
+			lipgloss.Printf("  - %s\n", item)
 		}
-	case "provider-cache-ttl":
-		lipgloss.Printf("%s (source: %s)\n", resolved.ProviderCacheTTL.Value, resolved.ProviderCacheTTL.Source)
-	default:
-		return fmt.Errorf("unknown configuration key: %s\n\nAvailable keys:\n  %s",
-			key, strings.Join(config.GetAvailableConfigKeys(), "\n  "))
+		return nil
 	}
 
+	lipgloss.Printf("%v (source: %s)\n", value, source)
 	return nil
 }
 
@@ -121,28 +170,25 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 
 	slog.Debug("Setting config value", "key", key, "value", valueStr)
 
-	switch key {
-	case "trusted-workspaces":
+	if !config.IsPreferenceKey(key) {
+		return unknownKeyError(key)
+	}
+
+	renderer := cli.NewRenderer()
+
+	if key == config.KeyTrustedWorkspaces {
 		if err := config.AddTrustedWorkspace(valueStr); err != nil {
 			return fmt.Errorf("failed to add trusted workspace: %w", err)
 		}
-		renderer := cli.NewRenderer()
 		lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Added trusted workspace: %s", valueStr)))
 		return nil
-	case "provider-cache-ttl":
-		if _, err := time.ParseDuration(valueStr); err != nil {
-			return fmt.Errorf("invalid duration %q for provider-cache-ttl (e.g. 30m, 12h): %w", valueStr, err)
-		}
-		if err := config.SetUserConfigValue(key, valueStr); err != nil {
-			return fmt.Errorf("failed to set provider-cache-ttl: %w", err)
-		}
-		renderer := cli.NewRenderer()
-		lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("provider-cache-ttl set to %s", valueStr)))
-		return nil
-	default:
-		return fmt.Errorf("unknown configuration key: %s\n\nAvailable keys:\n  %s",
-			key, strings.Join(config.GetAvailableConfigKeys(), "\n  "))
 	}
+
+	if err := config.SetPreference(key, valueStr); err != nil {
+		return err
+	}
+	lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("%s set to %s", key, valueStr)))
+	return nil
 }
 
 func runConfigList(cmd *cobra.Command, args []string) error {
@@ -151,18 +197,11 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	lipgloss.Println(renderer.RenderHeader("Available Configuration Keys"))
 	lipgloss.Println()
 
-	keys := config.GetAvailableConfigKeys()
-	for _, key := range keys {
-		lipgloss.Printf("  %s\n", key)
-
-		switch key {
-		case "trusted-workspaces":
-			lipgloss.Printf("    type: list of paths\n")
-			lipgloss.Printf("    desc: Deprecated, no longer grants trust. Local hooks are trusted per file (path + sha256) in ~/.gws/%s\n", config.TrustedHooksFile)
-		case "provider-cache-ttl":
-			lipgloss.Printf("    type: duration (default %s)\n", config.DefaultProviderCacheTTL)
-			lipgloss.Printf("    desc: How long a discovered provider workspace is kept before --refresh-providers re-reads it\n")
-		}
+	for _, k := range config.PreferenceKeys {
+		lipgloss.Printf("  %s\n", k.Name)
+		lipgloss.Printf("    type: %s (default %v)\n", k.Type, formatValue(k.Default))
+		lipgloss.Printf("    env:  %s\n", config.EnvVarName(k.Name))
+		lipgloss.Printf("    desc: %s\n", k.Description)
 		lipgloss.Println()
 	}
 

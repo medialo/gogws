@@ -21,7 +21,7 @@ import (
 	"golang.org/x/term"
 )
 
-func NewCommand(getConfig func() *config.Config) *cobra.Command {
+func NewCommand(getConfig func() *config.RunContext) *cobra.Command {
 	return &cobra.Command{
 		Use:   "ff",
 		Short: "Fast-forward pull all repositories",
@@ -32,7 +32,7 @@ func NewCommand(getConfig func() *config.Config) *cobra.Command {
 	}
 }
 
-func runFF(getConfig func() *config.Config) error {
+func runFF(getConfig func() *config.RunContext) error {
 	cfg := getConfig()
 	if cfg == nil {
 		return fmt.Errorf("no workspace found (no %s file)", gws2.ProjectsFileName)

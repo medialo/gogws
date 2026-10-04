@@ -18,7 +18,7 @@ import (
 	"golang.org/x/term"
 )
 
-func NewCommand(getConfig func() *config.Config) *cobra.Command {
+func NewCommand(getConfig func() *config.RunContext) *cobra.Command {
 	return &cobra.Command{
 		Use:   "fetch",
 		Short: "Fetch updates from origin for all repositories",
@@ -29,7 +29,7 @@ func NewCommand(getConfig func() *config.Config) *cobra.Command {
 	}
 }
 
-func runFetch(getConfig func() *config.Config) error {
+func runFetch(getConfig func() *config.RunContext) error {
 	cfg := getConfig()
 	if cfg == nil {
 		return fmt.Errorf("no workspace found (no .projects.gws file)")

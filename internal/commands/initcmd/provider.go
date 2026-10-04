@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newProviderCommand(getConfig func() *config.Config) *cobra.Command {
+func newProviderCommand(getConfig func() *config.RunContext) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "provider [github:org|gitlab:group|gitlab-graphql:group]",
 		Short: "Initialize a workspace from a git provider organization/group",

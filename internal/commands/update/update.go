@@ -31,7 +31,7 @@ var (
 	forceRefreshProviders bool
 )
 
-func NewCommand(getConfig func() *config.Config) *cobra.Command {
+func NewCommand(getConfig func() *config.RunContext) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Clone all missing repositories and workspaces",
@@ -69,7 +69,7 @@ that TTL, or --no-provider-discovery to disable discovery entirely.`,
 
 const maxRecursivePasses = 25
 
-func runUpdate(getConfig func() *config.Config) error {
+func runUpdate(getConfig func() *config.RunContext) error {
 	cfg := getConfig()
 	if cfg == nil {
 		return fmt.Errorf("no workspace found (no .projects.gws file)")
@@ -186,7 +186,7 @@ func runUpdate(getConfig func() *config.Config) error {
 		if err != nil {
 			return fmt.Errorf("failed to resolve workspace: %w", err)
 		}
-		refreshed := refreshProviderWorkspaces(renderer, ws, forceRefreshProviders, cfg.Parallel, cfg.StopOnError, cfg.IsInteractive)
+		refreshed := refreshProviderWorkspaces(renderer, ws, forceRefreshProviders, cfg.ProviderCacheTTL, cfg.Parallel, cfg.StopOnError, cfg.IsInteractive)
 		clonedProjects = append(clonedProjects, refreshed...)
 	}
 
@@ -234,27 +234,12 @@ func discoverAndMaterialize(ctx context.Context, provider providers.Provider, ch
 	return providers.Materialize(child, provider, group)
 }
 
-// providerCacheTTL resolves the user-configured provider-cache-ttl,
-// falling back to config.DefaultProviderCacheTTL if unset or unparsable.
-func providerCacheTTL() time.Duration {
-	resolved, err := config.LoadUserConfigResolved()
-	ttlStr := config.DefaultProviderCacheTTL
-	if err == nil && resolved.ProviderCacheTTL.Value != "" {
-		ttlStr = resolved.ProviderCacheTTL.Value
-	}
-	ttl, err := time.ParseDuration(ttlStr)
-	if err != nil {
-		ttl, _ = time.ParseDuration(config.DefaultProviderCacheTTL)
-	}
-	return ttl
-}
-
 // refreshProviderWorkspaces re-queries already-materialized provider
 // workspaces in ws whose cache has expired (or all of them, if force),
 // via the same job/engine machinery cloneWorkspaces uses. Returns the
 // paths that were actually refreshed.
-func refreshProviderWorkspaces(renderer *cli.Renderer, ws *gws2.Workspace, force bool, parallel int, stopOnError bool, isInteractive bool) []string {
-	stale := providers.StaleWorkspaces(ws, providerCacheTTL(), force)
+func refreshProviderWorkspaces(renderer *cli.Renderer, ws *gws2.Workspace, force bool, cacheTTL time.Duration, parallel int, stopOnError bool, isInteractive bool) []string {
+	stale := providers.StaleWorkspaces(ws, cacheTTL, force)
 	if len(stale) == 0 {
 		return nil
 	}

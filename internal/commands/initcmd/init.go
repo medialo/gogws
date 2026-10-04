@@ -20,7 +20,7 @@ var (
 	ignoreGitIgnoreGeneration bool
 )
 
-func NewCommand(getConfig func() *config.Config) *cobra.Command {
+func NewCommand(getConfig func() *config.RunContext) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize workspace configuration",
@@ -51,7 +51,7 @@ Running 'gogws init' without subcommand is equivalent to 'gogws init projects'.`
 	return cmd
 }
 
-func persistentPreInitCommand(getConfig func() *config.Config) error {
+func persistentPreInitCommand(getConfig func() *config.RunContext) error {
 	slog.Debug("Running PersistentPreRunE", "command", "init")
 
 	// If --reset flag is set, remove existing projects.gws file if it exists
@@ -95,7 +95,7 @@ func persistentPreInitCommand(getConfig func() *config.Config) error {
 	return nil
 }
 
-func persistentPostInitCommand(getConfig func() *config.Config) error {
+func persistentPostInitCommand(getConfig func() *config.RunContext) error {
 	slog.Debug("Running PersistentPostRunE", "command", "init")
 	if !ignoreGitIgnoreGeneration {
 		cfg := getConfig()
