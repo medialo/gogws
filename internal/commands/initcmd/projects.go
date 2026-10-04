@@ -38,7 +38,7 @@ By default, also generates a .gitignore file configured for GWS workspaces.`,
 			return runInitProjects()
 		},
 		PostRunE: func(cmd *cobra.Command, args []string) error {
-			return postRunInitProjects(getConfig)
+			return postRunInitProjects()
 		},
 	}
 
@@ -71,7 +71,7 @@ func preRunInitProjects(getConfig func() *config.RunContext) error {
 	return nil
 }
 
-func postRunInitProjects(getConfig func() *config.RunContext) error {
+func postRunInitProjects() error {
 	if !ignoreGitIgnoreGeneration {
 		workspaceRoot, err := os.Getwd()
 		if err != nil {

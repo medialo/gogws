@@ -26,11 +26,16 @@ scoops:
     description: "Manage a folder full of Git repositories as one workspace: status, fetch, pull and clone them all in parallel."
     depends: ["git"]
     shortcuts: [["gogws.exe", "gogws"]]
+    directory: bucket
 
     repository:
       owner: medialo
       name: scoop-hub
-      token: "{{ .Env.GITHUB_PERSONAL_AUTH_TOKEN }}"
+      token: "{{ .Env.GH_SCOOP_HUB_TOKEN }}"
+
+    commit_author:
+      name: "{{ .Env.GIT_AUTHOR_NAME }}"
+      email: "{{ .Env.GIT_AUTHOR_EMAIL }}"
 
 archives:
   - formats:
