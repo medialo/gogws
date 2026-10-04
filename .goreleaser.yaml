@@ -19,6 +19,19 @@ builds:
       - -X github.com/medialo/gogws/internal/commands/version.Version={{.Version}}
       - -X github.com/medialo/gogws/internal/commands/version.Commit={{.Commit}}
 
+scoops:
+  - name: gogws
+    license: AGPL
+    homepage: "https://github.com/medialo/gogws"
+    description: "Manage a folder full of Git repositories as one workspace: status, fetch, pull and clone them all in parallel."
+    depends: ["git"]
+    shortcuts: [["gogws.exe", "gogws"]]
+
+    repository:
+      owner: medialo
+      name: scoop-hub
+      token: "{{ .Env.GITHUB_PERSONAL_AUTH_TOKEN }}"
+
 archives:
   - formats:
       - tar.gz
