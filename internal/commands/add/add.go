@@ -15,6 +15,7 @@ func NewCommand(getConfig func() *config.RunContext) *cobra.Command {
 
 	cmd.AddCommand(newAddProjectCommand(getConfig))
 	cmd.AddCommand(newAddWorkspaceCommand(getConfig))
+	cmd.AddCommand(newAddCurrentCommand(getConfig))
 
 	return cmd
 }

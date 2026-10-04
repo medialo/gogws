@@ -27,13 +27,12 @@ func Materialize(parent *gws2.Workspace, provider Provider, group *ProviderGroup
 	parent.FolderExists = true
 
 	for _, proj := range group.Projects {
-		project := gws2.NewProject(root, proj.Slug, []*git.Remote{{Name: "origin", URL: proj.CloneURL}})
+		project := gws2.NewProject(root, proj.Slug, git.OriginRemotes(proj.CloneURL))
 		parent.AddProject(project)
 	}
 
 	for _, sub := range group.Subgroups {
-		remote := &git.Remote{Name: "origin", URL: provider.Name() + ":" + sub.Ref}
-		parent.AddWorkspace(gws2.NewChildWorkspace(root, sub.Slug, remote))
+		parent.AddWorkspace(gws2.NewChildWorkspace(root, sub.Slug, git.OriginRemotes(provider.Name()+":"+sub.Ref)))
 	}
 
 	if len(group.Projects) > 0 {

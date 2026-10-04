@@ -46,7 +46,7 @@ func runAddProject(getConfig func() *config.RunContext, args []string) error {
 		return err
 	}
 
-	project := gws2.NewProject(cfg.WorkspaceRoot, folderName, []*git.Remote{{Name: "origin", URL: gitURL}})
+	project := gws2.NewProject(cfg.WorkspaceRoot, folderName, git.OriginRemotes(gitURL))
 
 	ws.AddProject(project)
 	if err := ws.SaveProjects(); err != nil {

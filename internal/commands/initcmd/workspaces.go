@@ -122,19 +122,6 @@ func runInitWorkspaces() error {
 		return nil
 	}
 
-	//gwsDir := filepath.Join(workspaceRoot, gws.ConfigDirName)
-	//if err := os.MkdirAll(gwsDir, 0755); err != nil {
-	//	return fmt.Errorf("failed to create %s directory: %w", gws.ConfigDirName, err)
-	//}
-	//
-	//workspacesFile := filepath.Join(gwsDir, gws.WorkspacesFileName)
-	//
-	//file, err := os.Create(workspacesFile)
-	//if err != nil {
-	//	return fmt.Errorf("failed to create %s: %w", workspacesFile, err)
-	//}
-	//defer file.Close()
-
 	root, err := gws2.NewFromPath(workspaceRoot).RunDoctor(false).Recursive(false).Load()
 	if err != nil {
 		return fmt.Errorf("failed to resolve workspace: %w", err)
@@ -147,7 +134,7 @@ func runInitWorkspaces() error {
 			if remoteName == "" {
 				remoteName = "origin"
 			}
-			child = gws2.NewChildWorkspace(workspaceRoot, ws.Path, &git.Remote{Name: remoteName, URL: ws.RemoteURL})
+			child = gws2.NewChildWorkspace(workspaceRoot, ws.Path, []*git.Remote{{Name: remoteName, URL: ws.RemoteURL}})
 		} else {
 			child = gws2.NewFolderWorkspace(workspaceRoot, ws.Path)
 		}

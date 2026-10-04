@@ -82,7 +82,7 @@ func runAddWorkspace(getConfig func() *config.RunContext, args []string) error {
 		return err
 	}
 
-	child := gws2.NewChildWorkspace(cfg.WorkspaceRoot, folderName, &git.Remote{Name: "origin", URL: gitURL})
+	child := gws2.NewChildWorkspace(cfg.WorkspaceRoot, folderName, git.OriginRemotes(gitURL))
 
 	ws.AddWorkspace(child)
 	if err := ws.SaveWorkspace(); err != nil {

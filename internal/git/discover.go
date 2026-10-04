@@ -7,12 +7,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
 type DiscoveredRepo struct {
 	Path    string
-	Remotes []Remote
+	Remotes []*Remote
 }
 
 func DiscoverRepositories(rootPath string, maxDepth int) ([]DiscoveredRepo, error) {
@@ -74,7 +75,7 @@ func DiscoverRepositories(rootPath string, maxDepth int) ([]DiscoveredRepo, erro
 	return repos, nil
 }
 
-func getRemotesExec(repoPath string) ([]Remote, error) {
+func getRemotesExec(repoPath string) ([]*Remote, error) {
 	cmd := exec.Command("git", "remote", "-v")
 	cmd.Dir = repoPath
 	output, err := cmd.Output()
@@ -97,10 +98,17 @@ func getRemotesExec(repoPath string) ([]Remote, error) {
 		}
 	}
 
-	var remotes []Remote
+	var remotes []*Remote
 	for name, url := range remoteMap {
-		remotes = append(remotes, Remote{Name: name, URL: url})
+		remotes = append(remotes, &Remote{Name: name, URL: url})
 	}
+
+	sort.Slice(remotes, func(i, j int) bool {
+		if (remotes[i].Name == "origin") != (remotes[j].Name == "origin") {
+			return remotes[i].Name == "origin"
+		}
+		return remotes[i].Name < remotes[j].Name
+	})
 
 	return remotes, nil
 }
@@ -127,6 +135,30 @@ func FindUnknownRepositories(rootPath string, knownPaths []string) ([]string, er
 	}
 
 	return unknown, nil
+}
+
+func DiscoverRepository(rootPath, path string) (*DiscoveredRepo, error) {
+	if _, err := os.Stat(filepath.Join(path, ".git")); err != nil {
+		return nil, nil
+	}
+
+	relPath, err := filepath.Rel(rootPath, path)
+	if err != nil {
+		return nil, err
+	}
+	if relPath == "." {
+		return nil, nil
+	}
+	if relPath == ".." || strings.HasPrefix(relPath, ".."+string(os.PathSeparator)) {
+		return nil, fmt.Errorf("%s is outside workspace %s", path, rootPath)
+	}
+
+	remotes, err := getRemotesExec(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read remotes of %s: %w", path, err)
+	}
+
+	return &DiscoveredRepo{Path: relPath, Remotes: remotes}, nil
 }
 
 func normalizeRepoPath(rootPath, path string) string {

@@ -145,7 +145,7 @@ func runInitProjects() error {
 
 	projects := make([]*gws2.Project, len(discovered))
 	for i, d := range discovered {
-		projects[i] = gws2.NewProject(workspaceRoot, d.Path, toGitRemotePointers(d.Remotes))
+		projects[i] = gws2.NewProject(workspaceRoot, d.Path, d.Remotes)
 	}
 	lipgloss.Println(renderer.RenderProjectsList(projects))
 
@@ -175,13 +175,4 @@ func runInitProjects() error {
 	}
 
 	return nil
-}
-
-func toGitRemotePointers(remotes []git.Remote) []*git.Remote {
-	result := make([]*git.Remote, len(remotes))
-	for i, r := range remotes {
-		remote := r
-		result[i] = &remote
-	}
-	return result
 }

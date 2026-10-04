@@ -201,7 +201,7 @@ func NewProject(rootPath, relativePath string, remotes []*git.Remote) *Project {
 // .workspaces.gws. It is not attached to any parent workspace or index
 // yet; call Workspace.AddWorkspace to attach it, then
 // Workspace.SaveWorkspace to persist.
-func NewChildWorkspace(rootPath, relativePath string, remote *git.Remote) *Workspace {
+func NewChildWorkspace(rootPath, relativePath string, remotes []*git.Remote) *Workspace {
 	absPath := filepath.Join(rootPath, relativePath)
 	_, err := os.Stat(absPath)
 	return &Workspace{
@@ -211,7 +211,7 @@ func NewChildWorkspace(rootPath, relativePath string, remote *git.Remote) *Works
 			Name:         filepath.Base(absPath),
 			FolderExists: err == nil,
 		},
-		Remotes:  []*git.Remote{remote},
+		Remotes:  remotes,
 		Projects: []*Project{},
 		Children: []*Workspace{},
 	}

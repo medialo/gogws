@@ -39,6 +39,16 @@ gogws add workspace --folder scratch              # plain folder, no remote
 
 Missing arguments are prompted. `--auto-clone` clones right away.
 
+From inside an already cloned repository, register it in the enclosing workspace:
+
+```bash
+gogws add current                                  # prompts Project (default) or Workspace
+gogws add current --workspace                      # no prompt, add as workspace
+gogws add current --project                        # no prompt, add as project
+```
+
+Remotes are read from the repository. A repository already listed in the projects or workspaces file is rejected.
+
 ## Daily use
 
 ```bash
