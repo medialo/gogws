@@ -19,8 +19,8 @@ func (Format) Name() string {
 	return "gws"
 }
 
-func (f Format) Detect(dir string) (gws2.WorkspaceConfig, bool) {
-	c := newConfig(dir)
+func (f Format) Detect(files gws2.ConfigFiles) (gws2.WorkspaceConfig, bool) {
+	c := &config{dir: files.Dir, projects: locateProjectsFile(files), workspaces: locateWorkspacesFile(files)}
 	if !c.projects.Exists && !c.workspaces.Exists {
 		return nil, false
 	}
@@ -30,17 +30,17 @@ func (f Format) Detect(dir string) (gws2.WorkspaceConfig, bool) {
 }
 
 func (f Format) New(dir string) gws2.WorkspaceConfig {
-	return newConfig(dir)
+	return &config{
+		dir:        dir,
+		projects:   defaultLocation(dir, ProjectsFileNameInDir),
+		workspaces: defaultLocation(dir, WorkspacesFileNameInDir),
+	}
 }
 
 type config struct {
 	dir        string
 	projects   fileLocation
 	workspaces fileLocation
-}
-
-func newConfig(dir string) *config {
-	return &config{dir: dir, projects: locateProjectsFile(dir), workspaces: locateWorkspacesFile(dir)}
 }
 
 func (c *config) Format() gws2.WorkspaceFormat {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/medialo/gogws/internal/config"
 )
@@ -38,17 +39,42 @@ func (p *GitLabProvider) Discover(ctx context.Context, rawURL string, maxDepth i
 	if err != nil {
 		return nil, err
 	}
-	return discoverGitLabGroup(ctx, apiBase, fullPath, 0, maxDepth)
+	d := &gitlabDiscovery{
+		apiBase:  apiBase,
+		token:    config.GetProviderToken("gitlab"),
+		maxDepth: maxDepth,
+		limiter:  make(chan struct{}, gitlabParallel),
+	}
+	return d.group(ctx, fullPath, 0)
 }
 
-func discoverGitLabGroup(ctx context.Context, apiBase, fullPath string, depth, maxDepth int) (*ProviderGroup, error) {
-	token := config.GetProviderToken("gitlab")
+const gitlabParallel = 4
+
+type gitlabDiscovery struct {
+	apiBase  string
+	token    string
+	maxDepth int
+	limiter  chan struct{}
+}
+
+func (d *gitlabDiscovery) getJSON(ctx context.Context, url string, out any) (string, error) {
+	select {
+	case d.limiter <- struct{}{}:
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+	defer func() { <-d.limiter }()
+	return getJSON(ctx, url, d.token, out)
+}
+
+func (d *gitlabDiscovery) group(ctx context.Context, fullPath string, depth int) (*ProviderGroup, error) {
+	apiBase := d.apiBase
 
 	var group gitlabGroup
 	// The "gitlab:" prefix is an explicit declaration that this is meant
 	// to be a group, so a 404 here is a genuine "not found" error, not an
 	// ambiguous case to fall back on.
-	if _, err := getJSON(ctx, apiBase+"/groups/"+url.PathEscape(fullPath), token, &group); err != nil {
+	if _, err := d.getJSON(ctx, apiBase+"/groups/"+url.PathEscape(fullPath), &group); err != nil {
 		return nil, err
 	}
 
@@ -61,7 +87,7 @@ func discoverGitLabGroup(ctx context.Context, apiBase, fullPath string, depth, m
 	projectsURL := fmt.Sprintf("%s/groups/%d/projects?per_page=100&include_subgroups=false", apiBase, group.ID)
 	for projectsURL != "" && len(result.Projects) < MaxReposPerDiscover {
 		var page []gitlabProject
-		next, err := getJSON(ctx, projectsURL, token, &page)
+		next, err := d.getJSON(ctx, projectsURL, &page)
 		if err != nil {
 			return nil, err
 		}
@@ -74,28 +100,68 @@ func discoverGitLabGroup(ctx context.Context, apiBase, fullPath string, depth, m
 		projectsURL = next
 	}
 
-	if depth >= maxDepth {
+	if depth >= d.maxDepth {
 		return result, nil
 	}
 
+	var subgroupPaths []string
 	subgroupsURL := fmt.Sprintf("%s/groups/%d/subgroups?per_page=100", apiBase, group.ID)
 	for subgroupsURL != "" {
 		var page []gitlabSubgroup
-		next, err := getJSON(ctx, subgroupsURL, token, &page)
+		next, err := d.getJSON(ctx, subgroupsURL, &page)
 		if err != nil {
 			return nil, err
 		}
 		for _, sg := range page {
-			child, err := discoverGitLabGroup(ctx, apiBase, sg.FullPath, depth+1, maxDepth)
-			if err != nil {
-				return nil, err
-			}
-			result.Subgroups = append(result.Subgroups, child)
+			subgroupPaths = append(subgroupPaths, sg.FullPath)
 		}
 		subgroupsURL = next
 	}
 
+	children, err := d.subgroups(ctx, subgroupPaths, depth+1)
+	if err != nil {
+		return nil, err
+	}
+	result.Subgroups = append(result.Subgroups, children...)
+
 	return result, nil
+}
+
+func (d *gitlabDiscovery) subgroups(ctx context.Context, paths []string, depth int) ([]*ProviderGroup, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	children := make([]*ProviderGroup, len(paths))
+	var (
+		wg       sync.WaitGroup
+		once     sync.Once
+		firstErr error
+	)
+	for i, path := range paths {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			child, err := d.group(ctx, path, depth)
+			if err != nil {
+				once.Do(func() {
+					firstErr = err
+					cancel()
+				})
+				return
+			}
+			children[i] = child
+		}()
+	}
+	wg.Wait()
+
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	return children, nil
 }
 
 // parseGitLabRef splits a "gitlab:" remote's ref (prefix already

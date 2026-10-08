@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -105,6 +106,50 @@ func TestDiscoverRepository(t *testing.T) {
 		}
 		if repo != nil {
 			t.Errorf("DiscoverRepository(%q) = %+v, want nil", path, repo)
+		}
+	}
+}
+
+func makeRepo(t *testing.T, path string, withRemote bool) {
+	t.Helper()
+	gitDir := filepath.Join(path, ".git")
+	if err := os.MkdirAll(gitDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	config := "[core]\n\tbare = false\n"
+	if withRemote {
+		config += "[remote \"origin\"]\n\turl = git@example.com:org/repo.git\n"
+	}
+	if err := os.WriteFile(filepath.Join(gitDir, "config"), []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDiscoverRepositoryPaths(t *testing.T) {
+	root := t.TempDir()
+	makeRepo(t, filepath.Join(root, "api"), true)
+	makeRepo(t, filepath.Join(root, "api", "nested"), true)
+	makeRepo(t, filepath.Join(root, "local"), false)
+	makeRepo(t, filepath.Join(root, "group", "deep"), true)
+	makeRepo(t, filepath.Join(root, "a", "b", "c"), true)
+
+	cases := []struct {
+		depth int
+		want  []string
+	}{
+		{0, []string{"api"}},
+		{1, []string{"api"}},
+		{2, []string{"api", filepath.Join("group", "deep")}},
+		{3, []string{filepath.Join("a", "b", "c"), "api", filepath.Join("group", "deep")}},
+	}
+	for _, c := range cases {
+		got, err := DiscoverRepositoryPaths(root, c.depth)
+		if err != nil {
+			t.Fatal(err)
+		}
+		slices.Sort(got)
+		if !slices.Equal(got, c.want) {
+			t.Errorf("depth %d: got %v, want %v", c.depth, got, c.want)
 		}
 	}
 }

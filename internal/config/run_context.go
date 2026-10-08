@@ -2,12 +2,12 @@ package config
 
 import (
 	"log/slog"
-	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/medialo/gogws/internal/gws2/loader"
-	"golang.org/x/term"
+	"github.com/medialo/gogws/internal/interactive"
 )
 
 type RunContext struct {
@@ -37,18 +37,14 @@ func Initialize(prefs *Preferences, onlyChanges bool, workingDir string) error {
 		return nil
 	}
 
-	// todo is -d use to find root or if -d is present, is considered as root without check
-	root, err := loader.FindRoot()
+	root, err := resolveWorkspaceRoot(workingDir)
 	if err != nil {
 		return err
-	}
-	if workingDir != "" {
-		root = workingDir
 	}
 
 	runContext = &RunContext{
 		WorkspaceRoot:    root,
-		IsInteractive:    term.IsTerminal(int(os.Stdout.Fd())),
+		IsInteractive:    interactive.Enabled(),
 		OnlyChanges:      onlyChanges,
 		Parallel:         prefs.Parallel.Value,
 		Format:           prefs.Format.Value,
@@ -60,6 +56,13 @@ func Initialize(prefs *Preferences, onlyChanges bool, workingDir string) error {
 	slog.Debug("Run context initialized", "runContext", runContext)
 
 	return nil
+}
+
+func resolveWorkspaceRoot(workingDir string) (string, error) {
+	if workingDir != "" {
+		return filepath.Abs(workingDir)
+	}
+	return loader.FindRoot()
 }
 
 func GetRunContext() *RunContext {

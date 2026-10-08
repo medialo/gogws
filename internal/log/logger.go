@@ -8,7 +8,7 @@ import (
 
 	"charm.land/log/v2"
 	"github.com/charmbracelet/colorprofile"
-	"golang.org/x/term"
+	"github.com/medialo/gogws/internal/interactive"
 )
 
 var (
@@ -49,9 +49,7 @@ func SetVerbose(verbosity int) {
 	}
 
 	if verbosity > 0 {
-		isInteractive := term.IsTerminal(int(os.Stdout.Fd())) // todo centralized isInteractive value to allow --interactive or --no
-
-		if isInteractive {
+		if interactive.Enabled() {
 			slog.Debug("You are running gogws in verbose mode and with an interactive terminal. Logs will be written to a file.")
 			currTime := time.Now()
 			epoch := currTime.Unix()

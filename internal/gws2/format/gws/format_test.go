@@ -242,7 +242,7 @@ func TestFormat_ReadExtractsSelfLine(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, WorkspacesFileName), ". | git@example.com:org/root.git\nsub | folder\n")
 
-	node, err := (Format{}).New(root).Read()
+	node, err := open(root).Read()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,10 +260,10 @@ func TestFormat_WriteRoundTrip(t *testing.T) {
 	ws.AddProject(gws2.NewProject(root, "api", []*git.Remote{{Name: "origin", URL: "git@example.com:org/api.git"}, {Name: "upstream", URL: "git@example.com:up/api.git"}}))
 	ws.AddWorkspace(gws2.NewFolderWorkspace(root, "tools"))
 
-	if err := (Format{}).New(root).WriteProjects(ws); err != nil {
+	if err := open(root).WriteProjects(ws); err != nil {
 		t.Fatal(err)
 	}
-	if err := (Format{}).New(root).WriteWorkspaces(ws); err != nil {
+	if err := open(root).WriteWorkspaces(ws); err != nil {
 		t.Fatal(err)
 	}
 
@@ -275,7 +275,7 @@ func TestFormat_WriteRoundTrip(t *testing.T) {
 		t.Fatalf("projects file = %q", string(data))
 	}
 
-	node, err := (Format{}).New(root).Read()
+	node, err := open(root).Read()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +289,7 @@ func TestFormat_ClearProjects(t *testing.T) {
 	path := filepath.Join(root, ProjectsFileName)
 	writeFile(t, path, "api | git@example.com:org/api.git\n")
 
-	removed, err := (Format{}).New(root).ClearProjects()
+	removed, err := open(root).ClearProjects()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +299,7 @@ func TestFormat_ClearProjects(t *testing.T) {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatal("projects file still exists")
 	}
-	if removed, _ := (Format{}).New(root).ClearProjects(); removed != "" {
+	if removed, _ := open(root).ClearProjects(); removed != "" {
 		t.Fatalf("second clear removed %q", removed)
 	}
 }
@@ -332,6 +332,13 @@ func TestConfig_ReusesHandleAcrossWriteClearWrite(t *testing.T) {
 }
 
 func canRead(dir string) bool {
-	_, ok := (Format{}).Detect(dir)
+	_, ok := (Format{}).Detect(gws2.ScanConfigFiles(dir))
 	return ok
+}
+
+func open(dir string) gws2.WorkspaceConfig {
+	if config, ok := (Format{}).Detect(gws2.ScanConfigFiles(dir)); ok {
+		return config
+	}
+	return (Format{}).New(dir)
 }

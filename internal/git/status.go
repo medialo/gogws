@@ -2,7 +2,7 @@ package git
 
 import (
 	"bufio"
-	"fmt"
+	"bytes"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -32,26 +32,7 @@ func GetStatus(repoPath string) *RepositoryStatus {
 		return status
 	}
 
-	uncommitted, untracked := 0, 0
-	for _, line := range strings.Split(string(output), "\n") {
-		switch {
-		case strings.HasPrefix(line, "# branch.oid "):
-			status.Oid = strings.TrimPrefix(line, "# branch.oid ")
-		case strings.HasPrefix(line, "# branch.head "):
-			status.Branch = strings.TrimPrefix(line, "# branch.head ")
-		case strings.HasPrefix(line, "# branch.upstream"):
-			status.HasRemote = true
-		case strings.HasPrefix(line, "# branch.ab "):
-			fmt.Sscanf(line, "# branch.ab +%d -%d", &status.Ahead, &status.Behind)
-		case strings.HasPrefix(line, "?"):
-			untracked++
-		case len(line) > 0 && line[0] != '#':
-			uncommitted++
-		}
-	}
-	status.Uncommitted = uncommitted
-	status.Untracked = untracked
-	status.Clean = uncommitted == 0 && untracked == 0
+	parsePorcelainStatus(output, status)
 
 	branches, err := getBranches(repoPath)
 	if err == nil {
@@ -61,18 +42,55 @@ func GetStatus(repoPath string) *RepositoryStatus {
 	return status
 }
 
+func parsePorcelainStatus(output []byte, status *RepositoryStatus) {
+	uncommitted, untracked := 0, 0
+	scanner := bufio.NewScanner(bytes.NewReader(output))
+	for scanner.Scan() {
+		line := scanner.Text()
+		switch {
+		case strings.HasPrefix(line, "# branch.oid "):
+			status.Oid = strings.TrimPrefix(line, "# branch.oid ")
+		case strings.HasPrefix(line, "# branch.head "):
+			status.Branch = strings.TrimPrefix(line, "# branch.head ")
+		case strings.HasPrefix(line, "# branch.upstream"):
+			status.HasRemote = true
+		case strings.HasPrefix(line, "# branch.ab "):
+			fields := strings.Fields(strings.TrimPrefix(line, "# branch.ab "))
+			if len(fields) == 2 {
+				status.Ahead, _ = strconv.Atoi(strings.TrimPrefix(fields[0], "+"))
+				status.Behind, _ = strconv.Atoi(strings.TrimPrefix(fields[1], "-"))
+			}
+		case strings.HasPrefix(line, "?"):
+			untracked++
+		case len(line) > 0 && line[0] != '#':
+			uncommitted++
+		}
+	}
+	status.Uncommitted = uncommitted
+	status.Untracked = untracked
+	status.Clean = uncommitted == 0 && untracked == 0
+}
+
+func IsRepository(path string) bool {
+	_, err := os.Stat(filepath.Join(path, ".git"))
+	return err == nil
+}
+
 func getBranches(repoPath string) ([]BranchStatus, error) {
 	cmd := exec.Command("git", "for-each-ref",
-		"--format=%(refname:short)|%(upstream:short)|%(HEAD)",
+		"--format=%(refname:short)|%(upstream:short)|%(HEAD)|%(upstream:track,nobracket)",
 		"refs/heads/")
 	cmd.Dir = repoPath
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}
+	return parseBranches(output), nil
+}
 
+func parseBranches(output []byte) []BranchStatus {
 	var branches []BranchStatus
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	scanner := bufio.NewScanner(bytes.NewReader(output))
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -80,47 +98,42 @@ func getBranches(repoPath string) ([]BranchStatus, error) {
 			continue
 		}
 
-		parts := strings.Split(line, "|")
+		parts := strings.SplitN(line, "|", 4)
 		if len(parts) < 3 {
 			continue
 		}
 
-		branchName := parts[0]
-		upstream := parts[1]
-		isCurrent := parts[2] == "*"
-
 		branch := BranchStatus{
-			Name:      branchName,
-			IsCurrent: isCurrent,
-			Upstream:  upstream,
+			Name:      parts[0],
+			Upstream:  parts[1],
+			IsCurrent: parts[2] == "*",
 		}
-
-		if upstream != "" {
-			ahead, behind := getAheadBehind(repoPath, branchName, upstream)
-			branch.Ahead = ahead
-			branch.Behind = behind
+		if len(parts) == 4 && branch.Upstream != "" {
+			branch.Ahead, branch.Behind = parseTrack(parts[3])
 		}
 
 		branches = append(branches, branch)
 	}
 
-	return branches, nil
+	return branches
 }
 
-func getAheadBehind(repoPath, branch, upstream string) (ahead, behind int) {
-	cmd := exec.Command("git", "rev-list", "--left-right", "--count",
-		fmt.Sprintf("%s...%s", branch, upstream))
-	cmd.Dir = repoPath
-	output, err := cmd.Output()
-	if err != nil {
-		return 0, 0
+func parseTrack(track string) (ahead, behind int) {
+	for part := range strings.SplitSeq(track, ",") {
+		fields := strings.Fields(part)
+		if len(fields) != 2 {
+			continue
+		}
+		n, err := strconv.Atoi(fields[1])
+		if err != nil {
+			continue
+		}
+		switch fields[0] {
+		case "ahead":
+			ahead = n
+		case "behind":
+			behind = n
+		}
 	}
-
-	parts := strings.Fields(strings.TrimSpace(string(output)))
-	if len(parts) == 2 {
-		ahead, _ = strconv.Atoi(parts[0])
-		behind, _ = strconv.Atoi(parts[1])
-	}
-
 	return ahead, behind
 }

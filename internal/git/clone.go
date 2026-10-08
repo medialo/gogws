@@ -4,11 +4,19 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+
+	"github.com/medialo/gogws/internal/interactive"
 )
 
 func defaultRunner(ctx context.Context, cmd *exec.Cmd) error {
+	if !interactive.CanPrompt() {
+		WithUnattendedEnv(cmd)
+	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if hint := AuthenticationHint(string(output)); hint != "" {
+			return fmt.Errorf("%w: %s (%s)", err, string(output), hint)
+		}
 		return fmt.Errorf("%w: %s", err, string(output))
 	}
 	return nil

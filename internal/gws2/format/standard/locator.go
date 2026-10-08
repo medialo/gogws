@@ -2,7 +2,6 @@ package standard
 
 import (
 	"log/slog"
-	"os"
 	"path/filepath"
 
 	"github.com/medialo/gogws/internal/gws2"
@@ -17,13 +16,13 @@ type fileLocation struct {
 	Ignored  []string
 }
 
-func locate(root string) fileLocation {
+func locate(files gws2.ConfigFiles) fileLocation {
 	var found *fileLocation
 	var ignored []string
-	for _, dir := range []string{filepath.Join(root, gws2.ConfigDirName), root} {
+	for _, inConfigDir := range []bool{true, false} {
 		for _, enc := range encodings {
-			path := filepath.Join(dir, FileBaseName+"."+enc.extension())
-			if !fileExists(path) {
+			path, ok := files.Lookup(inConfigDir, FileBaseName+"."+enc.extension())
+			if !ok {
 				continue
 			}
 			if found == nil {
@@ -34,19 +33,18 @@ func locate(root string) fileLocation {
 		}
 	}
 	if found == nil {
-		return fileLocation{Path: filepath.Join(root, gws2.ConfigDirName, FileBaseName+"."+encodings[0].extension()), Encoding: encodings[0]}
+		return defaultLocation(files.Dir)
 	}
 	found.Ignored = ignored
 	return *found
+}
+
+func defaultLocation(dir string) fileLocation {
+	return fileLocation{Path: filepath.Join(dir, gws2.ConfigDirName, FileBaseName+"."+encodings[0].extension()), Encoding: encodings[0]}
 }
 
 func (l fileLocation) warnIgnored() {
 	if len(l.Ignored) > 0 {
 		slog.Warn("Several "+FileBaseName+" files found, please keep only one", "used", l.Path, "ignored", l.Ignored)
 	}
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }

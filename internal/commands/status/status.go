@@ -2,12 +2,9 @@ package status
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"slices"
-	"sort"
-	"sync"
 
 	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/export"
@@ -20,7 +17,6 @@ import (
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/ui/cli"
 
-	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 )
 
@@ -45,7 +41,7 @@ func runStatus(getConfig func() *config.RunContext) error {
 
 	slog.Debug("Running status command", "workspace", cfg.WorkspaceRoot)
 
-	ws2, err := loader.NewFromPath(cfg.WorkspaceRoot).Load()
+	ws2, err := loader.NewFromPath(cfg.WorkspaceRoot).Recursive(false).Load()
 	if err != nil {
 		return err
 	}
@@ -54,18 +50,10 @@ func runStatus(getConfig func() *config.RunContext) error {
 		return fmt.Errorf("no projects or workspaces found")
 	}
 
-	rootWorkspaceStatus := getStatusesView(cfg.Parallel, ws2)
-	if len(rootWorkspaceStatus) > 1 {
-		return fmt.Errorf("multiple workspaces found in the root workspace")
-	}
-	projectRepoStatus := getStatusesView(cfg.Parallel, ws2.Projects...)
-	sort.Slice(projectRepoStatus, func(i, j int) bool {
-		return projectRepoStatus[i].GwsRepository.Id() < projectRepoStatus[j].GwsRepository.Id()
-	})
-	workspaceRepoStatus := getStatusesView(cfg.Parallel, ws2.Children...)
-	sort.Slice(workspaceRepoStatus, func(i, j int) bool {
-		return workspaceRepoStatus[i].GwsRepository.Id() < workspaceRepoStatus[j].GwsRepository.Id()
-	})
+	statuses := getStatusesView(cfg.Parallel, ws2)
+	rootWorkspaceStatus := statuses[:1]
+	projectRepoStatus := statuses[1 : 1+len(ws2.Projects)]
+	workspaceRepoStatus := statuses[1+len(ws2.Projects):]
 
 	if cfg.Format == "json" || cfg.Format == "yaml" {
 		output, err := export.Format(cfg.Format, slices.Concat(rootWorkspaceStatus, workspaceRepoStatus, projectRepoStatus)...)
@@ -83,42 +71,26 @@ func runStatus(getConfig func() *config.RunContext) error {
 	return nil
 }
 
-func getStatusesView[T gws2.Repository](parallel int, repositories ...T) []*view.GitRepositoryStatusView {
-	if len(repositories) == 0 {
-		return nil
+func getStatusesView(parallel int, ws *gws2.Workspace) []*view.GitRepositoryStatusView {
+	repositories := make([]gws2.Repository, 0, 1+len(ws.Projects)+len(ws.Children))
+	repositories = append(repositories, ws)
+	for _, p := range ws.Projects {
+		repositories = append(repositories, p)
+	}
+	for _, c := range ws.Children {
+		repositories = append(repositories, c)
 	}
 
-	var mu sync.Mutex
-	statusViewMap := make(map[string]*view.GitRepositoryStatusView, len(repositories))
-
+	views := make([]*view.GitRepositoryStatusView, len(repositories))
 	jobs := make([]engine.Job, 0, len(repositories))
 
-	for _, repo := range repositories {
+	for i, repo := range repositories {
 		repoPath := repo.GetPath()
-
+		views[i] = &view.GitRepositoryStatusView{GwsRepository: repo}
 		jobs = append(jobs, engine.Job{
-			JobNameId: repo.GetPath(),
+			JobNameId: repoPath,
 			Fn: func(ctx context.Context, notify engine.Notify) error {
-				status := git.GetStatus(repoPath)
-				status.Path = repo.GetPath()
-
-				mu.Lock()
-				statusViewMap[repo.GetPath()] = &view.GitRepositoryStatusView{
-					GwsRepository: repo,
-					GitStatus:     nil,
-				}
-				mu.Unlock()
-
-				data, err := json.Marshal(status)
-				if err != nil {
-					return err
-				}
-
-				mu.Lock()
-				statusViewMap[repo.GetPath()].GitStatus = status
-				mu.Unlock()
-
-				notify(engine.EventJobLog, string(data))
+				views[i].GitStatus = git.GetStatus(repoPath)
 				return nil
 			},
 		})
@@ -130,19 +102,13 @@ func getStatusesView[T gws2.Repository](parallel int, repositories ...T) []*view
 
 	for range events {
 	}
+	<-resultCh
 
-	result := <-resultCh
-
-	for _, r := range result.Results {
-		status, ok := statusViewMap[r.JobId]
-		if ok && status.GitStatus == nil {
-			status.GitStatus = &git.RepositoryStatus{
-				Exists: false,
-				Error:  r.Error,
-				Path:   r.JobId,
-			}
+	for _, v := range views {
+		if v.GitStatus == nil {
+			v.GitStatus = &git.RepositoryStatus{Exists: false, Path: v.GwsRepository.GetPath()}
 		}
 	}
 
-	return lo.Values(statusViewMap)
+	return views
 }

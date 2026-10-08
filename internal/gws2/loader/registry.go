@@ -39,9 +39,10 @@ func Detect(dir string) (gws2.WorkspaceConfig, bool) {
 }
 
 func detectFormats(dir string) detection {
+	files := gws2.ScanConfigFiles(dir)
 	var found gws2.WorkspaceConfig
 	for _, format := range formats {
-		config, ok := format.Detect(dir)
+		config, ok := format.Detect(files)
 		if !ok {
 			continue
 		}

@@ -105,6 +105,14 @@ func IsNotFoundError(err error) bool {
 
 var linkNextRe = regexp.MustCompile(`<([^>]+)>;\s*rel="next"`)
 
+var httpClient = newHTTPClient()
+
+func newHTTPClient() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConnsPerHost = 16
+	return &http.Client{Timeout: 60 * time.Second, Transport: transport}
+}
+
 // getJSON performs an authenticated GET against url, JSON-decodes the
 // response body into out (skipped if out is nil), and returns the next
 // page URL (from a Link: rel="next" header — used by both GitHub's and
@@ -122,7 +130,7 @@ func getJSON(ctx context.Context, url, token string, out any) (string, error) {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
 
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := httpClient.Do(req)
 		if err != nil {
 			return "", err
 		}

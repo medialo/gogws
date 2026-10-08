@@ -106,27 +106,17 @@ func (l *Loader) loadRecursive(current *gws2.Workspace, rootPath string, depth i
 	}
 
 	projects := node.Projects
-	if patterns, err := LoadIgnorePatterns(rootPath); err == nil {
-		projects = filterIgnoredProjects(projects, patterns)
+	if rules, err := LoadIgnoreRules(rootPath); err == nil {
+		projects = filterIgnoredProjects(projects, rules)
 	}
 	for _, p := range projects {
-		_, statErr := os.Stat(p.AbsolutePath)
-		p.FolderExists = statErr == nil
 		current.AddProject(p)
 	}
 
 	for _, child := range node.Children {
 		nextRootPath := child.AbsolutePath
-		if _, err := os.Stat(nextRootPath); err != nil {
-			child.FolderExists = false
-			child.BindConfig(ConfigFor(nextRootPath))
-			current.AddWorkspace(child)
-			continue
-		}
-		child.FolderExists = true
-
-		if !l.recursive {
-			child.BindConfig(ConfigFor(nextRootPath))
+		if !child.FolderExists || !l.recursive {
+			child.BindConfig(newLazyConfig(nextRootPath))
 			current.AddWorkspace(child)
 			continue
 		}

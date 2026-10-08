@@ -10,6 +10,7 @@ const (
 	EventJobSkipped
 	EventSlog // todo fusionner le slog et le log ?
 	EventJobPhase
+	EventJobProgress
 )
 
 func (e EventType) String() string {
@@ -26,6 +27,8 @@ func (e EventType) String() string {
 		return "JOB_SKIPPED"
 	case EventJobPhase:
 		return "JOB_PHASE"
+	case EventJobProgress:
+		return "JOB_PROGRESS"
 	default:
 		return "UNKNOWN"
 	}
@@ -38,6 +41,7 @@ type Event struct {
 	Log         string
 	Err         error
 	Success     bool
+	Progress    *Progress
 }
 
 func (e Event) IsStart() bool {

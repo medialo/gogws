@@ -220,7 +220,7 @@ func postGraphQL(ctx context.Context, url, token, query string, variables map[st
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
 
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := httpClient.Do(req)
 		if err != nil {
 			return err
 		}

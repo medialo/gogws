@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -34,6 +35,10 @@ type ExecutionResult struct {
 	aTotalDuration atomic.Int64
 	Stopped        bool
 	StopReason     string
+	mu             sync.Mutex
+	successCount   int
+	failedCount    int
+	skippedCount   int
 }
 
 func NewNoExecutionResult() *ExecutionResult {
@@ -55,7 +60,17 @@ func NewExecuteResult(nb int) *ExecutionResult {
 }
 
 func (r *ExecutionResult) AddResult(result JobResult) {
+	r.mu.Lock()
 	r.Results = append(r.Results, result)
+	switch {
+	case result.IsSkipped():
+		r.skippedCount++
+	case result.IsSuccess():
+		r.successCount++
+	default:
+		r.failedCount++
+	}
+	r.mu.Unlock()
 	r.aTotalDuration.Add(int64(result.Duration))
 }
 
@@ -69,49 +84,65 @@ func (r *ExecutionResult) SortByOrder() {
 	})
 }
 
-func (r *ExecutionResult) Succeeded() []JobResult {
-	var results []JobResult
-	for _, res := range r.Results {
-		if res.IsSuccess() {
-			results = append(results, res)
+func (r *ExecutionResult) filter(count int, keep func(*JobResult) bool) []JobResult {
+	if count == 0 {
+		return nil
+	}
+	results := make([]JobResult, 0, count)
+	for i := range r.Results {
+		if keep(&r.Results[i]) {
+			results = append(results, r.Results[i])
 		}
 	}
 	return results
+}
+
+func (r *ExecutionResult) labels(count int, keep func(*JobResult) bool) []string {
+	labels := make([]string, 0, count)
+	for i := range r.Results {
+		if !keep(&r.Results[i]) {
+			continue
+		}
+		if label, err := labelString(r.Results[i].JobId); err == nil {
+			labels = append(labels, label)
+		}
+	}
+	return labels
+}
+
+func (r *ExecutionResult) Succeeded() []JobResult {
+	return r.filter(r.SuccessCount(), (*JobResult).IsSuccess)
 }
 
 func (r *ExecutionResult) Failed() []JobResult {
-	var results []JobResult
-	for _, res := range r.Results {
-		if res.IsFailure() {
-			results = append(results, res)
-		}
-	}
-	return results
+	return r.filter(r.FailedCount(), (*JobResult).IsFailure)
 }
 
 func (r *ExecutionResult) Skipped() []JobResult {
-	var results []JobResult
-	for _, res := range r.Results {
-		if res.IsSkipped() {
-			results = append(results, res)
-		}
-	}
-	return results
+	return r.filter(r.SkippedCount(), (*JobResult).IsSkipped)
 }
 
 func (r *ExecutionResult) SuccessCount() int {
-	return len(r.Succeeded())
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.successCount
 }
 
 func (r *ExecutionResult) FailedCount() int {
-	return len(r.Failed())
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.failedCount
 }
 
 func (r *ExecutionResult) SkippedCount() int {
-	return len(r.Skipped())
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.skippedCount
 }
 
 func (r *ExecutionResult) TotalCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return len(r.Results)
 }
 
@@ -124,33 +155,15 @@ func (r *ExecutionResult) AllSucceeded() bool {
 }
 
 func (r *ExecutionResult) SuccessLabels() []string {
-	labels := make([]string, 0, len(r.Succeeded()))
-	for _, res := range r.Succeeded() {
-		if label, err := labelString(res.JobId); err == nil {
-			labels = append(labels, label)
-		}
-	}
-	return labels
+	return r.labels(r.SuccessCount(), (*JobResult).IsSuccess)
 }
 
 func (r *ExecutionResult) FailedLabels() []string {
-	labels := make([]string, 0, len(r.Failed()))
-	for _, res := range r.Failed() {
-		if label, err := labelString(res.JobId); err == nil {
-			labels = append(labels, label)
-		}
-	}
-	return labels
+	return r.labels(r.FailedCount(), (*JobResult).IsFailure)
 }
 
 func (r *ExecutionResult) SkippedLabels() []string {
-	labels := make([]string, 0, len(r.Skipped()))
-	for _, res := range r.Skipped() {
-		if label, err := labelString(res.JobId); err == nil {
-			labels = append(labels, label)
-		}
-	}
-	return labels
+	return r.labels(r.SkippedCount(), (*JobResult).IsSkipped)
 }
 
 // todo a delete

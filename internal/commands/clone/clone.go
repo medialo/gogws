@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -20,7 +19,6 @@ import (
 	engineui "github.com/medialo/gogws/internal/ui/engineui"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 func NewCommand(getConfig func() *config.RunContext) *cobra.Command {
@@ -49,7 +47,7 @@ func runClone(getConfig func() *config.RunContext, args []string) error {
 	}
 
 	renderer := cli.NewRenderer()
-	isInteractive := term.IsTerminal(int(os.Stdout.Fd()))
+	isInteractive := cfg.IsInteractive
 
 	projectHooks, err := hooks.PrepareProjectHooks(ws, hooks.ProjectHooksOptions{Command: "clone", Pre: hooks.HookPreClone, Post: hooks.HookPostClone, PerRepoWorkspace: true})
 	if err != nil {
@@ -66,8 +64,7 @@ func runClone(getConfig func() *config.RunContext, args []string) error {
 			continue
 		}
 
-		status := git.GetStatus(project.GetPath())
-		if status.Exists {
+		if git.IsRepository(project.GetPath()) {
 			lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("%s: already exists", repoPath)))
 			skipped = append(skipped, repoPath)
 			continue
@@ -92,10 +89,12 @@ func runClone(getConfig func() *config.RunContext, args []string) error {
 		WithStopOnError(cfg.StopOnError)
 
 	eng := engine.NewEngine(opts)
-	events, resultCh := eng.RunJobs(context.Background(), jobs)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events, resultCh := eng.RunJobs(ctx, jobs)
 
 	if isInteractive {
-		if err := engineui.Run(events, opts.Parallel, len(jobs)); err != nil {
+		if err := engineui.Run(events, cancel, opts.Parallel, len(jobs)); err != nil {
 			slog.Error("UI error", "error", err)
 		}
 	} else {

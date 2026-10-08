@@ -17,17 +17,17 @@ func (Format) Name() string {
 	return "standard"
 }
 
-func (f Format) Detect(dir string) (gws2.WorkspaceConfig, bool) {
-	location := locate(dir)
+func (f Format) Detect(files gws2.ConfigFiles) (gws2.WorkspaceConfig, bool) {
+	location := locate(files)
 	if !location.Exists {
 		return nil, false
 	}
 	location.warnIgnored()
-	return &config{dir: dir, location: location}, true
+	return &config{dir: files.Dir, location: location}, true
 }
 
 func (f Format) New(dir string) gws2.WorkspaceConfig {
-	return &config{dir: dir, location: locate(dir)}
+	return &config{dir: dir, location: defaultLocation(dir)}
 }
 
 type config struct {

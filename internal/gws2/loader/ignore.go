@@ -11,7 +11,15 @@ import (
 	"github.com/medialo/gogws/internal/gws2/format/gws"
 )
 
-func LoadIgnorePatterns(rootPath string) ([]string, error) {
+func LoadIgnoreRules(rootPath string) (gws2.IgnoreRules, error) {
+	patterns, err := readIgnorePatterns(rootPath)
+	if err != nil {
+		return gws2.IgnoreRules{}, err
+	}
+	return gws2.CompileIgnoreRules(patterns), nil
+}
+
+func readIgnorePatterns(rootPath string) ([]string, error) {
 	ignorePath := filepath.Join(rootPath, gws.IgnoreFileName)
 	file, err := os.Open(ignorePath)
 	if err != nil {
@@ -40,14 +48,14 @@ func LoadIgnorePatterns(rootPath string) ([]string, error) {
 	return patterns, nil
 }
 
-func filterIgnoredProjects(projects []*gws2.Project, patterns []string) []*gws2.Project {
-	if len(patterns) == 0 {
+func filterIgnoredProjects(projects []*gws2.Project, rules gws2.IgnoreRules) []*gws2.Project {
+	if rules.IsEmpty() {
 		return projects
 	}
 
 	filtered := make([]*gws2.Project, 0, len(projects))
 	for _, project := range projects {
-		if !gws2.IsPathIgnored(project.AbsolutePath, patterns) {
+		if !rules.Match(project.AbsolutePath) {
 			filtered = append(filtered, project)
 		}
 	}

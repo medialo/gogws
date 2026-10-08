@@ -102,7 +102,7 @@ func TestRead_FullDocumentInEveryEncoding(t *testing.T) {
 			root := t.TempDir()
 			writeFile(t, filepath.Join(root, gws2.ConfigDirName, FileBaseName+"."+ext), content)
 
-			node, err := (Format{}).New(root).Read()
+			node, err := open(root).Read()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -118,12 +118,12 @@ func TestWriteProjects_KeepsEncodingAndSettings(t *testing.T) {
 			path := filepath.Join(root, gws2.ConfigDirName, FileBaseName+"."+ext)
 			writeFile(t, path, content)
 
-			node, err := (Format{}).New(root).Read()
+			node, err := open(root).Read()
 			if err != nil {
 				t.Fatal(err)
 			}
 			node.AddProject(gws2.NewProject(root, "web", []*git.Remote{{Name: "origin", URL: "git@example.com:org/web.git"}}))
-			if err := (Format{}).New(root).WriteProjects(node); err != nil {
+			if err := open(root).WriteProjects(node); err != nil {
 				t.Fatal(err)
 			}
 
@@ -142,7 +142,7 @@ func TestWriteProjects_KeepsEncodingAndSettings(t *testing.T) {
 				t.Fatalf("rewritten %s:\n%s", ext, data)
 			}
 
-			reread, err := (Format{}).New(root).Read()
+			reread, err := open(root).Read()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -186,7 +186,7 @@ func TestRead_Errors(t *testing.T) {
 			t.Run(name+"/"+ext, func(t *testing.T) {
 				root := t.TempDir()
 				writeFile(t, filepath.Join(root, FileBaseName+"."+ext), content)
-				if _, err := (Format{}).New(root).Read(); err == nil {
+				if _, err := open(root).Read(); err == nil {
 					t.Fatal("expected error")
 				}
 			})
@@ -209,7 +209,7 @@ func TestLocate_Priority(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelWarn})))
 	t.Cleanup(func() { slog.SetDefault(previous) })
 
-	config, ok := (Format{}).Detect(root)
+	config, ok := (Format{}).Detect(gws2.ScanConfigFiles(root))
 	if !ok {
 		t.Fatal("Detect = false")
 	}
@@ -235,7 +235,7 @@ func TestWriteWorkspaces_NewWorkspaceIsYaml(t *testing.T) {
 	ws := gws2.NewRootWorkspace(root)
 	ws.AddWorkspace(gws2.NewFolderWorkspace(root, "tools"))
 
-	if err := (Format{}).New(root).WriteWorkspaces(ws); err != nil {
+	if err := open(root).WriteWorkspaces(ws); err != nil {
 		t.Fatal(err)
 	}
 
@@ -253,10 +253,10 @@ func TestClear_RemovesFileWhenEmpty(t *testing.T) {
 	path := filepath.Join(root, gws2.ConfigDirName, FileBaseName+".json")
 	writeFile(t, path, `{"projects": [{"path": "api", "remotes": [{"url": "x"}]}], "workspaces": [{"path": "sub"}]}`)
 
-	if removed, err := (Format{}).New(root).ClearProjects(); err != nil || removed != path {
+	if removed, err := open(root).ClearProjects(); err != nil || removed != path {
 		t.Fatalf("ClearProjects = %q, %v", removed, err)
 	}
-	node, err := (Format{}).New(root).Read()
+	node, err := open(root).Read()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +264,7 @@ func TestClear_RemovesFileWhenEmpty(t *testing.T) {
 		t.Fatalf("after ClearProjects: %d projects, %d children", len(node.Projects), len(node.Children))
 	}
 
-	if _, err := (Format{}).New(root).ClearWorkspaces(); err != nil {
+	if _, err := open(root).ClearWorkspaces(); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
@@ -300,6 +300,13 @@ func TestConfig_ReusesHandleAcrossWriteClearWrite(t *testing.T) {
 }
 
 func canRead(dir string) bool {
-	_, ok := (Format{}).Detect(dir)
+	_, ok := (Format{}).Detect(gws2.ScanConfigFiles(dir))
 	return ok
+}
+
+func open(dir string) gws2.WorkspaceConfig {
+	if config, ok := (Format{}).Detect(gws2.ScanConfigFiles(dir)); ok {
+		return config
+	}
+	return (Format{}).New(dir)
 }

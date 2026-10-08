@@ -83,10 +83,11 @@ func runUpdate(getConfig func() *config.RunContext) error {
 	renderer := cli.NewRenderer()
 	var clonedProjects []string
 	var prunedRepos []string
+	hookApprovals := hooks.NewHookApprovals()
 
 	for pass := 0; ; pass++ {
 		slog.Debug(fmt.Sprintf("Running update command in workspace: %s", cfg.WorkspaceRoot), "pass", pass)
-		ws, err := loader.NewFromPath(cfg.WorkspaceRoot).Load()
+		ws, err := loader.NewFromPath(cfg.WorkspaceRoot).Recursive(recursive).Load()
 		if err != nil {
 			return fmt.Errorf("failed to resolve workspace: %w", err)
 		}
@@ -110,7 +111,7 @@ func runUpdate(getConfig func() *config.RunContext) error {
 				}
 
 				if prune {
-					removed, owners := pruneNotFound(renderer, result, ws.RemoveWorkspace)
+					removed, owners := pruneNotFound(renderer, result, ws.RemoveWorkspaces)
 					prunedRepos = append(prunedRepos, removed...)
 					for _, o := range owners {
 						workspaceOwners[o] = true
@@ -130,7 +131,7 @@ func runUpdate(getConfig func() *config.RunContext) error {
 				didClone = true
 				lipgloss.Println(renderer.RenderInfo(fmt.Sprintf("Cloning %d missing projects...", len(missingProjects))))
 
-				projectHooks, err := hooks.PrepareProjectHooks(ws, hooks.ProjectHooksOptions{Command: "update", Pre: hooks.HookPreClone, Post: hooks.HookPostClone, PerRepoWorkspace: true})
+				projectHooks, err := hooks.PrepareProjectHooks(ws, hooks.ProjectHooksOptions{Command: "update", Pre: hooks.HookPreClone, Post: hooks.HookPostClone, PerRepoWorkspace: true, Approvals: hookApprovals})
 				if err != nil {
 					return fmt.Errorf("failed to prepare hooks: %w", err)
 				}
@@ -145,7 +146,7 @@ func runUpdate(getConfig func() *config.RunContext) error {
 				}
 
 				if prune {
-					removed, owners := pruneNotFound(renderer, result, ws.RemoveProject)
+					removed, owners := pruneNotFound(renderer, result, ws.RemoveProjects)
 					prunedRepos = append(prunedRepos, removed...)
 					for _, o := range owners {
 						projectOwners[o] = true
@@ -202,24 +203,30 @@ func runUpdate(getConfig func() *config.RunContext) error {
 // indicates the remote repository no longer exists (as opposed to a
 // transient network or auth failure). Returns the removed paths and the
 // distinct workspace nodes whose own config file needs to be re-saved.
-func pruneNotFound(renderer *cli.Renderer, result *engine.ExecutionResult, remove func(path string) *gws2.Workspace) ([]string, []*gws2.Workspace) {
+func pruneNotFound(renderer *cli.Renderer, result *engine.ExecutionResult, removeAll func(paths ...string) []*gws2.Workspace) ([]string, []*gws2.Workspace) {
+	var candidates []string
+	for _, r := range result.Failed() {
+		if git.IsNotFoundError(r.Error) || providers.IsNotFoundError(r.Error) {
+			candidates = append(candidates, r.JobId)
+		}
+	}
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+
 	var removed []string
 	var owners []*gws2.Workspace
 	seen := map[*gws2.Workspace]bool{}
-	for _, r := range result.Failed() {
-		if !git.IsNotFoundError(r.Error) && !providers.IsNotFoundError(r.Error) {
-			continue
-		}
-		owner := remove(r.JobId)
+	for i, owner := range removeAll(candidates...) {
 		if owner == nil {
 			continue
 		}
-		removed = append(removed, r.JobId)
+		removed = append(removed, candidates[i])
 		if !seen[owner] {
 			seen[owner] = true
 			owners = append(owners, owner)
 		}
-		lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("Repository not found, removed from workspace: %s", r.JobId)))
+		lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("Repository not found, removed from workspace: %s", candidates[i])))
 	}
 	return removed, owners
 }
@@ -330,10 +337,12 @@ func runJobs(jobs []engine.Job, maxParallel int, stopOnError bool, isInteractive
 		WithStopOnError(stopOnError)
 
 	eng := engine.NewEngine(opts)
-	events, resultCh := eng.RunJobs(context.Background(), jobs)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events, resultCh := eng.RunJobs(ctx, jobs)
 
 	if isInteractive {
-		if err := engineui.Run(events, opts.Parallel, len(jobs)); err != nil {
+		if err := engineui.Run(events, cancel, opts.Parallel, len(jobs)); err != nil {
 			slog.Error("UI error", "error", err)
 		}
 	} else {

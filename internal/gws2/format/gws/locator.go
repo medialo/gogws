@@ -2,7 +2,6 @@ package gws
 
 import (
 	"log/slog"
-	"os"
 	"path/filepath"
 
 	"github.com/medialo/gogws/internal/gws2"
@@ -14,20 +13,17 @@ type fileLocation struct {
 	Ignored string
 }
 
-func locateProjectsFile(root string) fileLocation {
-	return locate(root, ProjectsFileNameInDir, ProjectsFileName)
+func locateProjectsFile(files gws2.ConfigFiles) fileLocation {
+	return locate(files, ProjectsFileNameInDir, ProjectsFileName)
 }
 
-func locateWorkspacesFile(root string) fileLocation {
-	return locate(root, WorkspacesFileNameInDir, WorkspacesFileName)
+func locateWorkspacesFile(files gws2.ConfigFiles) fileLocation {
+	return locate(files, WorkspacesFileNameInDir, WorkspacesFileName)
 }
 
-func locate(root, inDirName, legacyName string) fileLocation {
-	configDirPath := filepath.Join(root, gws2.ConfigDirName, inDirName)
-	legacyPath := filepath.Join(root, legacyName)
-
-	hasConfigDir := fileExists(configDirPath)
-	hasLegacy := fileExists(legacyPath)
+func locate(files gws2.ConfigFiles, inDirName, legacyName string) fileLocation {
+	configDirPath, hasConfigDir := files.Lookup(true, inDirName)
+	legacyPath, hasLegacy := files.Lookup(false, legacyName)
 
 	if hasConfigDir {
 		location := fileLocation{Path: configDirPath, Exists: true}
@@ -39,16 +35,15 @@ func locate(root, inDirName, legacyName string) fileLocation {
 	if hasLegacy {
 		return fileLocation{Path: legacyPath, Exists: true}
 	}
-	return fileLocation{Path: configDirPath, Exists: false}
+	return defaultLocation(files.Dir, inDirName)
+}
+
+func defaultLocation(dir, inDirName string) fileLocation {
+	return fileLocation{Path: filepath.Join(dir, gws2.ConfigDirName, inDirName)}
 }
 
 func (l fileLocation) warnIgnored() {
 	if l.Ignored != "" {
 		slog.Warn("Duplicate file found, please remove the legacy file", "legacy", l.Ignored, "used", l.Path)
 	}
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }

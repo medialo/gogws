@@ -65,12 +65,12 @@ func runCheck(getConfig func() *config.RunContext) error {
 		knownByPath[filepath.Clean(c.GetPath())] = c
 	}
 
-	discovered, err := git.DiscoverRepositories(cfg.WorkspaceRoot, 0)
+	discovered, err := git.DiscoverRepositoryPaths(cfg.WorkspaceRoot, 0)
 	if err != nil {
 		return fmt.Errorf("failed to discover repositories: %w", err)
 	}
 
-	ignorePatterns, err := loader.LoadIgnorePatterns(cfg.WorkspaceRoot)
+	ignoreRules, err := loader.LoadIgnoreRules(cfg.WorkspaceRoot)
 	if err != nil {
 		return fmt.Errorf("failed to load ignore patterns: %w", err)
 	}
@@ -83,7 +83,7 @@ func runCheck(getConfig func() *config.RunContext) error {
 		allPaths[path] = true
 	}
 	for _, repo := range discovered {
-		allPaths[filepath.Clean(filepath.Join(cfg.WorkspaceRoot, repo.Path))] = true
+		allPaths[filepath.Clean(filepath.Join(cfg.WorkspaceRoot, repo))] = true
 	}
 
 	sortedPaths := make([]string, 0, len(allPaths))
@@ -111,7 +111,7 @@ func runCheck(getConfig func() *config.RunContext) error {
 		}
 
 		switch {
-		case gws2.IsPathIgnored(path, ignorePatterns):
+		case ignoreRules.Match(path):
 			entries = append(entries, checkEntry{label, "Ignored"})
 		case knownByPath[path] != nil && !knownByPath[path].IsGitRepository() && isDir(path):
 			knownCount++

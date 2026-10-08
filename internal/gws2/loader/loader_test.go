@@ -364,9 +364,9 @@ type countingFormat struct {
 	calls map[string]int
 }
 
-func (c *countingFormat) Detect(dir string) (gws2.WorkspaceConfig, bool) {
-	c.calls[gws2.PathKey(dir)]++
-	return c.WorkspaceFormat.Detect(dir)
+func (c *countingFormat) Detect(files gws2.ConfigFiles) (gws2.WorkspaceConfig, bool) {
+	c.calls[gws2.PathKey(files.Dir)]++
+	return c.WorkspaceFormat.Detect(files)
 }
 
 func withCountingFormats(t *testing.T) *countingFormat {
@@ -493,22 +493,22 @@ func TestFilterIgnoredProjects(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := filterIgnoredProjects(projects, c.patterns); len(got) != c.want {
+			if got := filterIgnoredProjects(projects, gws2.CompileIgnoreRules(c.patterns)); len(got) != c.want {
 				t.Fatalf("len = %d, want %d", len(got), c.want)
 			}
 		})
 	}
 }
 
-func TestLoadIgnorePatterns(t *testing.T) {
+func TestReadIgnorePatterns(t *testing.T) {
 	root := t.TempDir()
-	patterns, err := LoadIgnorePatterns(root)
+	patterns, err := readIgnorePatterns(root)
 	if err != nil || len(patterns) != 0 {
 		t.Fatalf("missing file: patterns=%v err=%v", patterns, err)
 	}
 
 	writeFile(t, filepath.Join(root, gws.IgnoreFileName), "# comment\npattern1\n\npattern2\n# another comment\npattern3\n")
-	patterns, err = LoadIgnorePatterns(root)
+	patterns, err = readIgnorePatterns(root)
 	if err != nil {
 		t.Fatal(err)
 	}

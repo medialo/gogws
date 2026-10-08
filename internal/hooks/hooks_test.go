@@ -3,6 +3,7 @@ package hooks
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -89,8 +90,7 @@ func TestFindHook_ConflictIsAnError(t *testing.T) {
 func TestPrepareProjectHooks_ConflictFailsBeforeAnyPrompt(t *testing.T) {
 	isolateHome(t)
 	SetTrustMode(TrustModeAsk)
-	promptInput = strings.NewReader("")
-	t.Cleanup(func() { promptInput = os.Stdin })
+	withPromptInput(t, strings.NewReader(""))
 
 	root := t.TempDir()
 	api := newProject(root, "api")
@@ -198,8 +198,7 @@ func TestHookTrustState_PerFileAndContent(t *testing.T) {
 func TestApprove_AskPromptTrustRecordsFile(t *testing.T) {
 	isolateHome(t)
 	SetTrustMode(TrustModeAsk)
-	promptInput = strings.NewReader("t\n")
-	t.Cleanup(func() { promptInput = os.Stdin })
+	withPromptInput(t, strings.NewReader("t\n"))
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "post-ff.sh")
@@ -217,8 +216,7 @@ func TestApprove_AskPromptTrustRecordsFile(t *testing.T) {
 func TestApprove_ConsecutivePromptsShareInput(t *testing.T) {
 	isolateHome(t)
 	SetTrustMode(TrustModeAsk)
-	promptInput = strings.NewReader("t\nt\n")
-	t.Cleanup(func() { promptInput = os.Stdin })
+	withPromptInput(t, strings.NewReader("t\nt\n"))
 
 	dir := t.TempDir()
 	for _, name := range []string{"api.post-ff.sh", "post-ff.sh"} {
@@ -386,4 +384,15 @@ func TestAround_PostHookSkippedWhenOperationFails(t *testing.T) {
 	if !errors.Is(err, opErr) {
 		t.Fatalf("err = %v; want the operation error untouched", err)
 	}
+}
+
+func withPromptInput(t *testing.T, input io.Reader) {
+	t.Helper()
+	previousInput, previousCanPrompt := promptInput, canPrompt
+	promptInput = input
+	canPrompt = func() bool { return true }
+	t.Cleanup(func() {
+		promptInput = previousInput
+		canPrompt = previousCanPrompt
+	})
 }

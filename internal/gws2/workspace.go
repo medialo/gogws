@@ -260,16 +260,21 @@ func (w *Workspace) AddProject(project *Project) {
 	}
 }
 
-// RemoveProject removes the project at path from this workspace or any
-// descendant workspace, and rebuilds the shared index. Returns the
-// workspace the project belonged to (so its own .projects.gws can be
-// re-saved), or nil if no matching project was found anywhere in the tree.
-func (w *Workspace) RemoveProject(path string) *Workspace {
-	owner := w.removeProjectAnywhere(path)
-	if owner != nil {
+func (w *Workspace) RemoveProjects(paths ...string) []*Workspace {
+	return w.removeAll(paths, w.removeProjectAnywhere)
+}
+
+func (w *Workspace) removeAll(paths []string, remove func(path string) *Workspace) []*Workspace {
+	owners := make([]*Workspace, len(paths))
+	removed := false
+	for i, path := range paths {
+		owners[i] = remove(path)
+		removed = removed || owners[i] != nil
+	}
+	if removed {
 		w.ReindexAll()
 	}
-	return owner
+	return owners
 }
 
 func (w *Workspace) removeProjectAnywhere(path string) *Workspace {
@@ -288,17 +293,8 @@ func (w *Workspace) removeProjectAnywhere(path string) *Workspace {
 	return nil
 }
 
-// RemoveWorkspace removes the child workspace at path from this workspace
-// or any descendant workspace, and rebuilds the shared index. Returns the
-// workspace the child belonged to (so its own .workspaces.gws can be
-// re-saved), or nil if no matching workspace was found anywhere in the
-// tree.
-func (w *Workspace) RemoveWorkspace(path string) *Workspace {
-	owner := w.removeWorkspaceAnywhere(path)
-	if owner != nil {
-		w.ReindexAll()
-	}
-	return owner
+func (w *Workspace) RemoveWorkspaces(paths ...string) []*Workspace {
+	return w.removeAll(paths, w.removeWorkspaceAnywhere)
 }
 
 func (w *Workspace) removeWorkspaceAnywhere(path string) *Workspace {

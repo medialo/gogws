@@ -57,8 +57,10 @@ func promptRepoDetails(ws *gws2.Workspace, args []string) (gitURL, folderName st
 		field = field.Placeholder(suggestion)
 	}
 
-	if err := prompt.RunField(field); err != nil {
-		return "", "", err
+	if prompt.Available() {
+		if err := prompt.RunField(field); err != nil {
+			return "", "", err
+		}
 	}
 	if folderName == "" {
 		folderName = suggestion

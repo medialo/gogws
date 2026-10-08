@@ -1,6 +1,7 @@
 package engineui
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -8,8 +9,14 @@ import (
 	"github.com/medialo/gogws/internal/engine"
 	"github.com/medialo/gogws/internal/ui/styles"
 
+	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
+)
+
+const (
+	maxShownCompleted = 10
+	progressBarWidth  = 20
 )
 
 type WorkerStatus int
@@ -20,60 +27,55 @@ const (
 )
 
 type WorkerState struct {
-	Status  WorkerStatus
-	JobId   string
-	Phase   string
-	LastLog string
-	Spinner spinner.Model
+	Status   WorkerStatus
+	JobId    string
+	Phase    string
+	LastLog  string
+	Progress *engine.Progress
 }
 
 type CompletedJob struct {
-	Label   any
-	Success bool
-	Error   error
-	LastLog string
+	Label    any
+	Success  bool
+	Error    error
+	LastLog  string
+	rendered string
 }
 
 type doneMsg struct{}
 
 type Model struct {
 	events    <-chan engine.Event
+	cancel    context.CancelFunc
 	workers   []WorkerState
-	completed []CompletedJob
+	spinner   spinner.Model
+	bar       progress.Model
+	recent    []CompletedJob
+	failed    []CompletedJob
+	succeeded int
 	total     int
 	done      int
 	styles    *styles.Styles
 	quitting  bool
 }
 
-func NewModel(events <-chan engine.Event, maxParallel int, totalJobs int) Model {
-	s := styles.Get()
-	workers := make([]WorkerState, maxParallel)
-	for i := range workers {
-		sp := spinner.New()
-		sp.Spinner = spinner.Dot
-		workers[i] = WorkerState{
-			Status:  WorkerIdle,
-			Spinner: sp,
-		}
-	}
+func NewModel(events <-chan engine.Event, cancel context.CancelFunc, maxParallel int, totalJobs int) Model {
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
 	return Model{
-		events:    events,
-		workers:   workers,
-		completed: make([]CompletedJob, 0),
-		total:     totalJobs,
-		done:      0,
-		styles:    s,
+		events:  events,
+		cancel:  cancel,
+		workers: make([]WorkerState, maxParallel),
+		spinner: sp,
+		bar:     progress.New(progress.WithWidth(progressBarWidth), progress.WithoutPercentage(), progress.WithFillCharacters(progress.DefaultFullCharFullBlock, progress.DefaultEmptyCharBlock)),
+		recent:  make([]CompletedJob, 0, maxShownCompleted),
+		total:   totalJobs,
+		styles:  styles.Get(),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	cmds := make([]tea.Cmd, 0, len(m.workers)+1)
-	for i := range m.workers {
-		cmds = append(cmds, m.workers[i].Spinner.Tick)
-	}
-	cmds = append(cmds, m.waitForEvent())
-	return tea.Batch(cmds...)
+	return tea.Batch(m.spinner.Tick, m.waitForEvent())
 }
 
 func (m Model) waitForEvent() tea.Cmd {
@@ -92,6 +94,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "q":
 			m.quitting = true
+			if m.cancel != nil {
+				m.cancel()
+			}
 			return m, tea.Quit
 		}
 
@@ -106,9 +111,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if workerID >= 0 && workerID < len(m.workers) {
 			switch event.Type {
 			case engine.EventJobStart:
-				m.workers[workerID].Status = WorkerRunning
-				m.workers[workerID].JobId = event.JobNameId
-				m.workers[workerID].LastLog = "starting..."
+				m.workers[workerID] = WorkerState{Status: WorkerRunning, JobId: event.JobNameId, LastLog: "starting..."}
 
 			case engine.EventJobPhase:
 				m.workers[workerID].Phase = event.Log
@@ -119,39 +122,68 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case engine.EventJobLog:
 				m.workers[workerID].LastLog = event.Log
 
+			case engine.EventJobProgress:
+				if event.Progress != nil {
+					m.workers[workerID].Progress = event.Progress
+				}
+
 			case engine.EventJobErr:
 				m.workers[workerID].LastLog = event.Log
 
 			case engine.EventJobEnd:
-				m.completed = append(m.completed, CompletedJob{
+				m.addCompleted(CompletedJob{
 					Label:   event.JobNameId,
 					Success: event.Success,
 					Error:   event.Err,
 					LastLog: m.workers[workerID].LastLog,
 				})
-				m.done++
-				m.workers[workerID].Status = WorkerIdle
-				m.workers[workerID].JobId = ""
-				m.workers[workerID].Phase = ""
-				m.workers[workerID].LastLog = ""
+				m.workers[workerID] = WorkerState{Status: WorkerIdle}
 			}
 		}
 
 		return m, m.waitForEvent()
 
 	case spinner.TickMsg:
-		var cmds []tea.Cmd
-		for i := range m.workers {
-			var cmd tea.Cmd
-			m.workers[i].Spinner, cmd = m.workers[i].Spinner.Update(msg)
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-		return m, tea.Batch(cmds...)
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 	}
 
 	return m, nil
+}
+
+func (m *Model) addCompleted(job CompletedJob) {
+	m.done++
+	if job.Success {
+		m.succeeded++
+	} else {
+		m.failed = append(m.failed, job)
+	}
+	job.rendered = m.renderCompleted(job)
+	if len(m.recent) == maxShownCompleted {
+		copy(m.recent, m.recent[1:])
+		m.recent = m.recent[:maxShownCompleted-1]
+	}
+	m.recent = append(m.recent, job)
+}
+
+func (m Model) renderCompleted(job CompletedJob) string {
+	if job.Success {
+		return fmt.Sprintf("  %s %s %s\n",
+			m.styles.Success.Render(m.styles.IconSuccess),
+			job.Label,
+			m.styles.Muted.Render(job.LastLog),
+		)
+	}
+	errMsg := ""
+	if job.Error != nil {
+		errMsg = fmt.Sprintf(" - %s", job.Error.Error())
+	}
+	return fmt.Sprintf("  %s %s%s\n",
+		m.styles.Error.Render(m.styles.IconError),
+		job.Label,
+		m.styles.Error.Render(errMsg),
+	)
 }
 
 func (m Model) View() tea.View {
@@ -162,38 +194,19 @@ func (m Model) View() tea.View {
 		return tea.NewView(b.String())
 	}
 
-	if len(m.completed) > 0 {
+	if len(m.recent) > 0 {
 		b.WriteString(m.styles.Muted.Render("─── Completed ───"))
 		b.WriteString("\n")
-		maxShow := 10
-		start := 0
-		if len(m.completed) > maxShow {
-			start = len(m.completed) - maxShow
-			b.WriteString(m.styles.Muted.Render(fmt.Sprintf("  ... and %d more\n", start)))
+		if hidden := m.done - len(m.recent); hidden > 0 {
+			b.WriteString(m.styles.Muted.Render(fmt.Sprintf("  ... and %d more\n", hidden)))
 		}
-		for i := start; i < len(m.completed); i++ {
-			job := m.completed[i]
-			if job.Success {
-				b.WriteString(fmt.Sprintf("  %s %s %s\n",
-					m.styles.Success.Render(m.styles.IconSuccess),
-					job.Label,
-					m.styles.Muted.Render(job.LastLog),
-				))
-			} else {
-				errMsg := ""
-				if job.Error != nil {
-					errMsg = fmt.Sprintf(" - %s", job.Error.Error())
-				}
-				b.WriteString(fmt.Sprintf("  %s %s%s\n",
-					m.styles.Error.Render(m.styles.IconError),
-					job.Label,
-					m.styles.Error.Render(errMsg),
-				))
-			}
+		for _, job := range m.recent {
+			b.WriteString(job.rendered)
 		}
 		b.WriteString("\n")
 	}
 
+	spinnerView := m.spinner.View()
 	b.WriteString(m.styles.Muted.Render("─── Workers ───"))
 	b.WriteString("\n")
 	for i, w := range m.workers {
@@ -202,9 +215,20 @@ func (m Model) View() tea.View {
 			if len(log) > 60 {
 				log = log[:57] + "..."
 			}
+			if w.Progress != nil {
+				b.WriteString(fmt.Sprintf("  %s [%d] %s %s %s %s\n",
+					spinnerView,
+					i,
+					m.styles.Path.Render(w.JobId),
+					m.styles.Muted.Render(w.Progress.Phase),
+					m.bar.ViewAs(float64(w.Progress.Percent)/100),
+					m.styles.Info.Render(fmt.Sprintf("%3d%% (%d/%d)", w.Progress.Percent, w.Progress.Current, w.Progress.Total)),
+				))
+				continue
+			}
 			if w.Phase != "" {
 				b.WriteString(fmt.Sprintf("  %s [%d] %s %s\n",
-					w.Spinner.View(),
+					spinnerView,
 					i,
 					m.styles.Path.Render(w.JobId),
 					m.styles.Warning.Render("⚙ "+w.Phase),
@@ -215,7 +239,7 @@ func (m Model) View() tea.View {
 				continue
 			}
 			b.WriteString(fmt.Sprintf("  %s [%d] %s %s\n",
-				w.Spinner.View(),
+				spinnerView,
 				i,
 				m.styles.Path.Render(w.JobId),
 				m.styles.Muted.Render(log),
@@ -243,44 +267,32 @@ func (m Model) View() tea.View {
 func (m Model) renderFinalSummary() string {
 	var b strings.Builder
 
-	successCount := 0
-	failedCount := 0
-	for _, job := range m.completed {
-		if job.Success {
-			successCount++
-		} else {
-			failedCount++
-		}
-	}
-
 	b.WriteString("\n")
 	b.WriteString(m.styles.Title.Render("═══ Summary ═══"))
 	b.WriteString("\n\n")
 
-	if successCount > 0 {
+	if m.succeeded > 0 {
 		b.WriteString(fmt.Sprintf("  %s %s %d\n",
 			m.styles.Success.Render(m.styles.IconSuccess),
 			m.styles.Success.Render("Succeeded:"),
-			successCount,
+			m.succeeded,
 		))
 	}
-	if failedCount > 0 {
+	if len(m.failed) > 0 {
 		b.WriteString(fmt.Sprintf("  %s %s %d\n",
 			m.styles.Error.Render(m.styles.IconError),
 			m.styles.Error.Render("Failed:"),
-			failedCount,
+			len(m.failed),
 		))
 		b.WriteString("\n")
 		b.WriteString(m.styles.Error.Render("  Failed jobs:"))
 		b.WriteString("\n")
-		for _, job := range m.completed {
-			if !job.Success {
-				errMsg := ""
-				if job.Error != nil {
-					errMsg = fmt.Sprintf(": %s", job.Error.Error())
-				}
-				b.WriteString(fmt.Sprintf("    - %s%s\n", job.Label, m.styles.Muted.Render(errMsg)))
+		for _, job := range m.failed {
+			errMsg := ""
+			if job.Error != nil {
+				errMsg = fmt.Sprintf(": %s", job.Error.Error())
 			}
+			b.WriteString(fmt.Sprintf("    - %s%s\n", job.Label, m.styles.Muted.Render(errMsg)))
 		}
 	}
 
@@ -288,29 +300,13 @@ func (m Model) renderFinalSummary() string {
 	return b.String()
 }
 
-func Run(eventsCh <-chan engine.Event, maxParallel int, totalJobs int) error {
+func Run(eventsCh <-chan engine.Event, cancel context.CancelFunc, maxParallel int, totalJobs int) error {
 	slog.Debug("Starting UI", "maxParallel", maxParallel, "totalJobs", totalJobs)
-	model := NewModel(eventsCh, maxParallel, totalJobs)
+	model := NewModel(eventsCh, cancel, maxParallel, totalJobs)
 
 	p := tea.NewProgram(model)
 	_, err := p.Run()
+	for range eventsCh {
+	}
 	return err
 }
-
-//func RunWithTimeout(events <-chan engine.Event, parallelism int, totalJobs int, timeout time.Duration) error {
-//	p := tea.NewProgram(NewModel(events, parallelism, totalJobs))
-//
-//	done := make(chan error, 1)
-//	go func() {
-//		_, err := p.Run()
-//		done <- err
-//	}()
-//
-//	select {
-//	case err := <-done:
-//		return err
-//	case <-time.After(timeout):
-//		p.Quit()
-//		return fmt.Errorf("UI timeout after %s", timeout)
-//	}
-//}

@@ -127,14 +127,14 @@ func promptMatchSelection(renderer *cli.Renderer, matches []gws2.Repository, que
 	}
 
 	var selected gws2.Repository
-	err := huh.NewForm(
+	err := prompt.RunForm(fmt.Sprintf("multiple matches for %q", query), huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[gws2.Repository]().
 				Title(fmt.Sprintf("Multiple matches for %q — pick one", query)).
 				Options(opts...).
 				Value(&selected),
 		),
-	).WithKeyMap(prompt.KeyMap()).Run()
+	))
 	if err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return nil, fmt.Errorf("selection canceled for %q", query)

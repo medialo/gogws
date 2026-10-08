@@ -27,6 +27,18 @@ type ProjectHooksOptions struct {
 	Pre              HookType
 	Post             HookType
 	PerRepoWorkspace bool
+	Approvals        HookApprovals
+}
+
+type hookApproval struct {
+	approved bool
+	trusted  bool
+}
+
+type HookApprovals map[string]hookApproval
+
+func NewHookApprovals() HookApprovals {
+	return HookApprovals{}
 }
 
 type ownedProject struct {
@@ -44,22 +56,24 @@ func ownedProjects(root *gws2.Workspace) []ownedProject {
 	return owned
 }
 
-func approveAll(found []*HookInfo, workspaceRoot string, approved map[*HookInfo]bool) ([]*HookInfo, error) {
+func approveAll(found []*HookInfo, workspaceRoot string, approvals HookApprovals) ([]*HookInfo, error) {
 	kept := make([]*HookInfo, 0, len(found))
 	for _, h := range found {
 		if h == nil {
 			continue
 		}
-		ok, seen := approved[h]
-		if !seen {
-			var err error
-			ok, err = approve(h, workspaceRoot)
+		decision, seen := approvals[h.Path]
+		if seen {
+			h.Trusted = h.Trusted || decision.trusted
+		} else {
+			ok, err := approve(h, workspaceRoot)
 			if err != nil {
 				return nil, err
 			}
-			approved[h] = ok
+			decision = hookApproval{approved: ok, trusted: h.Trusted}
+			approvals[h.Path] = decision
 		}
-		if ok {
+		if decision.approved {
 			kept = append(kept, h)
 		}
 	}
@@ -104,7 +118,10 @@ func PrepareProjectHooks(root *gws2.Workspace, opts ProjectHooksOptions) (*Proje
 		found = append(found, discovered{ownedProject: op, pre: pre, post: post})
 	}
 
-	approved := make(map[*HookInfo]bool)
+	approved := opts.Approvals
+	if approved == nil {
+		approved = NewHookApprovals()
+	}
 	for _, d := range found {
 		pre, err := approveAll([]*HookInfo{sharedPre, d.pre}, d.owner.GetPath(), approved)
 		if err != nil {

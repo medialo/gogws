@@ -6,11 +6,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/medialo/gogws/internal/config"
+	"github.com/medialo/gogws/internal/interactive"
 )
 
 type TrustMode string
@@ -52,6 +54,7 @@ var (
 	promptInput  io.Reader = os.Stdin
 	promptReader *bufio.Reader
 	promptSource io.Reader
+	canPrompt    = interactive.CanPrompt
 )
 
 func readPromptLine() (string, error) {
@@ -123,6 +126,11 @@ func approve(hook *HookInfo, workspaceRoot string) (bool, error) {
 		return false, nil
 	case TrustModeAll:
 		return true, nil
+	}
+
+	if !canPrompt() {
+		slog.Warn("Untrusted hook skipped (non-interactive), use --trust-hooks=all or trust it from an interactive terminal", "origin", hook.Origin, "state", state, "path", hook.Path)
+		return false, nil
 	}
 
 	switch PromptTrust(hook, workspaceRoot, state) {

@@ -2,7 +2,7 @@ package gws2
 
 type WorkspaceFormat interface {
 	Name() string
-	Detect(dir string) (WorkspaceConfig, bool)
+	Detect(files ConfigFiles) (WorkspaceConfig, bool)
 	New(dir string) WorkspaceConfig
 }
 

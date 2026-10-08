@@ -105,12 +105,18 @@ func (engine *Engine) runJobsInternal(ctx context.Context, jobs []Job, eventCh c
 				start := time.Now()
 
 				notify := func(eventType EventType, log string) {
-					eventCh <- Event{
+					event := Event{
 						GoroutineID: id,
 						Type:        eventType,
 						JobNameId:   runJob.job.JobNameId,
 						Log:         log,
 					}
+					if eventType == EventJobProgress {
+						if p, ok := parseProgress(log); ok {
+							event.Progress = &p
+						}
+					}
+					eventCh <- event
 				}
 
 				err := runJob.job.Fn(cancelCtx, notify)

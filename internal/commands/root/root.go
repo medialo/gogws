@@ -8,6 +8,7 @@ import (
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/gws2"
 	"github.com/medialo/gogws/internal/hooks"
+	"github.com/medialo/gogws/internal/interactive"
 	"github.com/medialo/gogws/internal/log"
 	"github.com/medialo/gogws/internal/theme"
 
@@ -20,8 +21,9 @@ var (
 	cfgFile     string
 	onlyChanges bool
 	verbosity   int
-	trustHooks  string
-	workingDir  string
+	trustHooks    string
+	workingDir    string
+	noInteractive bool
 )
 
 var rootCmd = &cobra.Command{
@@ -36,6 +38,9 @@ Compatible with gws project files (.projects.gws)`,
 }
 
 func persistentPreRun(cmd *cobra.Command, _ []string) error {
+	if noInteractive {
+		interactive.Disable()
+	}
 	log.SetVerbose(verbosity)
 	slog.Debug("Running PersistentPreRunE", "command", "root")
 	hooks.SetTrustMode(hooks.ParseTrustMode(trustHooks))
@@ -90,6 +95,7 @@ func NewCommand() *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&trustHooks, "trust-hooks", "ask", "trust mode for local hooks: ask, all, skip")
 	rootCmd.PersistentFlags().Bool(config.KeyStopOnError, false, "stop execution on first error")
 	rootCmd.PersistentFlags().StringVarP(&workingDir, "working-dir", "D", "", "set working directory for the command. If not set the current directory is used")
+	rootCmd.PersistentFlags().BoolVar(&noInteractive, "no-interactive", false, "disable interactive UI and prompts (also enabled by CI=true or "+interactive.EnvNoInteractive+"=true)")
 
 	// profiling
 	applyProfilingFlags(rootCmd)

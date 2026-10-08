@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/medialo/gogws/internal/gws2/loader"
 	"log/slog"
-	"os"
 
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/engine"
@@ -15,7 +14,6 @@ import (
 	engineui "github.com/medialo/gogws/internal/ui/engineui"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 func NewCommand(getConfig func() *config.RunContext) *cobra.Command {
@@ -62,9 +60,7 @@ func runFetch(getConfig func() *config.RunContext) error {
 			JobNameId: p.GetPath(),
 			Fn: func(ctx context.Context, notify engine.Notify) error {
 				notify(engine.EventJobLog, "Checking if project is cloned...")
-				status := git.GetStatus(repoPath)
-				if !status.Exists {
-					ctx.Done()
+				if !git.IsRepository(repoPath) {
 					return nil
 				}
 				return projectHooks.Around(ctx, p, notify, func() error {
@@ -80,12 +76,14 @@ func runFetch(getConfig func() *config.RunContext) error {
 		WithStopOnError(cfg.StopOnError)
 
 	eng := engine.NewEngine(opts)
-	eventsCh, resultCh := eng.RunJobs(context.Background(), jobs)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	eventsCh, resultCh := eng.RunJobs(ctx, jobs)
 
-	isInteractive := term.IsTerminal(int(os.Stdout.Fd()))
+	isInteractive := cfg.IsInteractive
 
 	if isInteractive {
-		if err := engineui.Run(eventsCh, opts.Parallel, len(jobs)); err != nil {
+		if err := engineui.Run(eventsCh, cancel, opts.Parallel, len(jobs)); err != nil {
 			slog.Error("UI error", "error", err)
 		}
 	} else {

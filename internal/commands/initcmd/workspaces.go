@@ -1,6 +1,7 @@
 package initcmd
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -109,12 +110,14 @@ func runInitWorkspaces() error {
 		}
 	})
 
-	huh.NewForm(
+	if err := prompt.RunForm("workspace selection", huh.NewForm(
 		huh.NewGroup(
 			huh.NewMultiSelect[workspaceEntry]().
 				Title("Found subdirectories:").
 				Options(opts...).
-				Value(&selectedWorkspaces))).WithKeyMap(prompt.KeyMap()).Run()
+				Value(&selectedWorkspaces)))); err != nil && !errors.Is(err, huh.ErrUserAborted) {
+		return err
+	}
 
 	if len(selectedWorkspaces) == 0 {
 		lipgloss.Println(renderer.RenderWarning("No workspaces configured"))
