@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"charm.land/log/v2"
+	"github.com/charmbracelet/colorprofile"
 	"golang.org/x/term"
 )
 
@@ -62,6 +63,7 @@ func SetVerbose(verbosity int) {
 				panic(err)
 			}
 			baseHandler.SetOutput(f)
+			baseHandler.SetColorProfile(colorprofile.NoTTY)
 		}
 	}
 }
