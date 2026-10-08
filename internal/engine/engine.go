@@ -96,28 +96,12 @@ func (engine *Engine) runJobsInternal(ctx context.Context, jobs []Job, eventCh c
 				default:
 				}
 
-				eventCh <- Event{
-					GoroutineID: id,
-					Type:        EventJobStart,
-					JobNameId:   runJob.job.JobNameId,
-				}
+				base := eventBase{Worker: id, Job: runJob.job.JobNameId}
+				eventCh <- JobStarted{eventBase: base}
 
 				start := time.Now()
 
-				notify := func(eventType EventType, log string) {
-					event := Event{
-						GoroutineID: id,
-						Type:        eventType,
-						JobNameId:   runJob.job.JobNameId,
-						Log:         log,
-					}
-					if eventType == EventJobProgress {
-						if p, ok := parseProgress(log); ok {
-							event.Progress = &p
-						}
-					}
-					eventCh <- event
-				}
+				notify := NewNotify(id, runJob.job.JobNameId, func(e Event) { eventCh <- e })
 
 				err := runJob.job.Fn(cancelCtx, notify)
 				duration := time.Since(start)
@@ -131,13 +115,7 @@ func (engine *Engine) runJobsInternal(ctx context.Context, jobs []Job, eventCh c
 					}
 				}
 
-				eventCh <- Event{
-					GoroutineID: id,
-					Type:        EventJobEnd,
-					JobNameId:   runJob.job.JobNameId,
-					Success:     success,
-					Err:         jobErr,
-				}
+				eventCh <- JobEnded{eventBase: base, Success: success, Err: jobErr}
 
 				//resultsChan <- JobResult{
 				//	JobId:    runJob.job.JobNameId,

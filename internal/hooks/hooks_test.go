@@ -310,8 +310,8 @@ func scriptHook(t *testing.T, dir, base, body string, exit int) string {
 }
 
 type recorded struct {
-	kind engine.EventType
-	log  string
+	phase bool
+	log   string
 }
 
 func TestAround_RunsPostHookInJobWithPhaseAndEnv(t *testing.T) {
@@ -332,25 +332,32 @@ func TestAround_RunsPostHookInJobWithPhaseAndEnv(t *testing.T) {
 	}}
 
 	var events []recorded
-	notify := func(kind engine.EventType, log string) { events = append(events, recorded{kind, log}) }
+	notify := engine.NewNotify(0, api.GetPath(), func(e engine.Event) {
+		switch e := e.(type) {
+		case engine.JobPhase:
+			events = append(events, recorded{phase: true, log: e.Phase})
+		case engine.JobLog:
+			events = append(events, recorded{log: e.Line})
+		}
+	})
 
 	if err := set.Around(context.Background(), api, notify, func() error { return nil }); err != nil {
 		t.Fatalf("Around: %v", err)
 	}
 
-	if len(events) == 0 || events[0].kind != engine.EventJobPhase || !strings.Contains(events[0].log, "post-ff") {
+	if len(events) == 0 || !events[0].phase || !strings.Contains(events[0].log, "post-ff") {
 		t.Fatalf("first event = %+v; want post-ff phase", events)
 	}
 	found := false
 	for _, e := range events {
-		if e.kind == engine.EventJobLog && strings.TrimSpace(e.log) == "api" {
+		if !e.phase && strings.TrimSpace(e.log) == "api" {
 			found = true
 		}
 	}
 	if !found {
 		t.Fatalf("hook output with GOGWS_PROJECT_NAME not forwarded: %+v", events)
 	}
-	if last := events[len(events)-1]; last.kind != engine.EventJobPhase || last.log != "" {
+	if last := events[len(events)-1]; !last.phase || last.log != "" {
 		t.Fatalf("last event = %+v; want phase reset", last)
 	}
 }
@@ -364,7 +371,7 @@ func TestAround_HookExitCodeFailsJob(t *testing.T) {
 		api.GetPath(): {owner: ws, post: []*HookInfo{post}},
 	}}
 
-	err := set.Around(context.Background(), api, func(engine.EventType, string) {}, func() error { return nil })
+	err := set.Around(context.Background(), api, engine.Notify{}, func() error { return nil })
 	if err == nil || !strings.Contains(err.Error(), "post-ff hook failed") {
 		t.Fatalf("err = %v; want post-ff hook failed", err)
 	}
@@ -380,7 +387,7 @@ func TestAround_PostHookSkippedWhenOperationFails(t *testing.T) {
 	}}
 
 	opErr := errors.New("ff failed")
-	err := set.Around(context.Background(), api, func(engine.EventType, string) {}, func() error { return opErr })
+	err := set.Around(context.Background(), api, engine.Notify{}, func() error { return opErr })
 	if !errors.Is(err, opErr) {
 		t.Fatalf("err = %v; want the operation error untouched", err)
 	}

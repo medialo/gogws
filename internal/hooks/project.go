@@ -174,8 +174,8 @@ func (s *ProjectHooks) runInJob(ctx context.Context, hook *HookInfo, owner *gws2
 		ProjectName:   project.GetName(),
 	}, hook)
 
-	notify(engine.EventJobPhase, fmt.Sprintf("hook %s (%s)", hook.Name, filepath.Base(hook.Path)))
-	defer notify(engine.EventJobPhase, "")
+	notify.Phase(fmt.Sprintf("hook %s (%s)", hook.Name, filepath.Base(hook.Path)))
+	defer notify.Phase("")
 
 	cmd, err := buildCommand(ctx, hook, dir, env)
 	if err != nil {

@@ -32,10 +32,11 @@ func TestParseProgress(t *testing.T) {
 }
 
 func TestLineNotifyWriter_ProgressDeduplicated(t *testing.T) {
-	var logs, progress []string
+	var logs []string
+	var progress []Progress
 	w := &lineNotifyWriter{
 		notify:   func(s string) { logs = append(logs, s) },
-		progress: func(s string) { progress = append(progress, s) },
+		progress: func(p Progress) { progress = append(progress, p) },
 		now:      func() time.Time { return time.Unix(0, 0) },
 	}
 
@@ -49,8 +50,8 @@ func TestLineNotifyWriter_ProgressDeduplicated(t *testing.T) {
 	if len(progress) > 101 {
 		t.Fatalf("progress events = %d, want <= 101", len(progress))
 	}
-	if last, _ := parseProgress(progress[len(progress)-1]); last.Percent != 100 {
-		t.Fatalf("last progress = %q, want 100%%", progress[len(progress)-1])
+	if last := progress[len(progress)-1]; last.Percent != 100 || last.Current != 1000 || last.Phase != "Receiving objects" {
+		t.Fatalf("last progress = %+v, want Receiving objects 100%% (1000/1000)", last)
 	}
 	if len(logs) != 1 || logs[0] != "Cloning into 'api'..." {
 		t.Fatalf("logs = %v, want only the non-progress line", logs)
@@ -69,7 +70,7 @@ func TestNotifiableCmd_KilledOnCancel(t *testing.T) {
 	cmd := longRunningCommand()
 
 	done := make(chan error, 1)
-	go func() { done <- Wrap(cmd).Run(ctx, func(EventType, string) {}) }()
+	go func() { done <- Wrap(cmd).Run(ctx, Notify{}) }()
 
 	time.Sleep(300 * time.Millisecond)
 	cancel()
@@ -93,7 +94,11 @@ func TestNotifiableCmd_UnattendedEnv(t *testing.T) {
 	cmd.Env = append(os.Environ(), "GOGWS_HELPER_PRINT_ENV=1")
 
 	var logs []string
-	if err := Wrap(cmd).Run(context.Background(), func(_ EventType, s string) { logs = append(logs, s) }); err != nil {
+	if err := Wrap(cmd).Run(context.Background(), NewNotify(0, "env", func(e Event) {
+		if l, ok := e.(JobLog); ok {
+			logs = append(logs, l.Line)
+		}
+	})); err != nil {
 		t.Fatal(err)
 	}
 	joined := strings.Join(logs, "\n")

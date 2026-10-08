@@ -59,12 +59,12 @@ func runFetch(getConfig func() *config.RunContext) error {
 		jobs = append(jobs, engine.Job{
 			JobNameId: p.GetPath(),
 			Fn: func(ctx context.Context, notify engine.Notify) error {
-				notify(engine.EventJobLog, "Checking if project is cloned...")
+				notify.Log("Checking if project is cloned...")
 				if !git.IsRepository(repoPath) {
 					return nil
 				}
 				return projectHooks.Around(ctx, p, notify, func() error {
-					notify(engine.EventJobLog, "Fetching...")
+					notify.Log("Fetching...")
 					return engine.Wrap(git.Fetch(repoPath).AsCmd()).Run(ctx, notify)
 				})
 			},

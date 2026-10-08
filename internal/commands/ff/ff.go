@@ -66,14 +66,14 @@ func runFF(getConfig func() *config.RunContext) error {
 		jobs = append(jobs, engine.Job{
 			JobNameId: p.GetPath(),
 			Fn: func(ctx context.Context, notify engine.Notify) error {
-				notify(engine.EventJobLog, "Checking if project is cloned...")
+				notify.Log("Checking if project is cloned...")
 
 				if !git.IsRepository(p.GetPath()) {
 					return fmt.Errorf("%s is not a git repository", p.GetPath())
 				}
 
 				return projectHooks.Around(ctx, p, notify, func() error {
-					notify(engine.EventJobLog, "Fast-forwarding...")
+					notify.Log("Fast-forwarding...")
 					return engine.Wrap(git.Pull(p.GetPath()).AsCmd()).Run(ctx, notify)
 				})
 			},

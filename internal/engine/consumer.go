@@ -26,28 +26,26 @@ func (m progressMilestones) reached(jobID string, p *Progress) bool {
 
 func ConsumeVerbose(events <-chan Event) {
 	milestones := progressMilestones{}
-	for e := range events {
-		switch e.Type {
-		case EventJobStart:
-			slog.Info("JOB STARTED", "goroutine", e.GoroutineID, "jobId", e.JobNameId)
-		case EventJobPhase:
-			if e.Log != "" {
-				slog.Info("JOB PHASE", "goroutine", e.GoroutineID, "jobId", e.JobNameId, "phase", e.Log)
+	for event := range events {
+		switch e := event.(type) {
+		case JobStarted:
+			slog.Info("JOB STARTED", "goroutine", e.Worker, "jobId", e.Job)
+		case JobPhase:
+			if e.Phase != "" {
+				slog.Info("JOB PHASE", "goroutine", e.Worker, "jobId", e.Job, "phase", e.Phase)
 			}
-		case EventJobProgress:
-			if e.Progress != nil && milestones.reached(e.JobNameId, e.Progress) {
-				slog.Info("JOB PROGRESS", "jobId", e.JobNameId, "phase", e.Progress.Phase, "percent", e.Progress.Percent, "current", e.Progress.Current, "total", e.Progress.Total)
+		case JobProgress:
+			if milestones.reached(e.Job, &e.Progress) {
+				slog.Info("JOB PROGRESS", "jobId", e.Job, "phase", e.Phase, "percent", e.Percent, "current", e.Current, "total", e.Total)
 			}
-		case EventJobLog:
-			slog.Debug("JOB LOG", "goroutine", e.GoroutineID, "jobId", e.JobNameId, "log", e.Log)
-		case EventJobErr:
-			slog.Error("JOB ERR", "goroutine", e.GoroutineID, "jobId", e.JobNameId, "log", e.Log)
-		case EventJobEnd:
-			delete(milestones, e.JobNameId)
+		case JobLog:
+			slog.Debug("JOB LOG", "goroutine", e.Worker, "jobId", e.Job, "log", e.Line)
+		case JobEnded:
+			delete(milestones, e.Job)
 			if e.Success {
-				slog.Info("JOB END", "goroutine", e.GoroutineID, "jobId", e.JobNameId)
+				slog.Info("JOB END", "goroutine", e.Worker, "jobId", e.Job)
 			} else {
-				slog.Error("JOB FAIL", "goroutine", e.GoroutineID, "jobId", e.JobNameId, "error", e.Err)
+				slog.Error("JOB FAIL", "goroutine", e.Worker, "jobId", e.Job, "error", e.Err)
 			}
 		}
 	}

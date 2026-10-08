@@ -105,42 +105,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case engine.Event:
-		event := msg
-		workerID := event.GoroutineID
-
-		if workerID >= 0 && workerID < len(m.workers) {
-			switch event.Type {
-			case engine.EventJobStart:
-				m.workers[workerID] = WorkerState{Status: WorkerRunning, JobId: event.JobNameId, LastLog: "starting..."}
-
-			case engine.EventJobPhase:
-				m.workers[workerID].Phase = event.Log
-				if event.Log != "" {
-					m.workers[workerID].LastLog = ""
-				}
-
-			case engine.EventJobLog:
-				m.workers[workerID].LastLog = event.Log
-
-			case engine.EventJobProgress:
-				if event.Progress != nil {
-					m.workers[workerID].Progress = event.Progress
-				}
-
-			case engine.EventJobErr:
-				m.workers[workerID].LastLog = event.Log
-
-			case engine.EventJobEnd:
-				m.addCompleted(CompletedJob{
-					Label:   event.JobNameId,
-					Success: event.Success,
-					Error:   event.Err,
-					LastLog: m.workers[workerID].LastLog,
-				})
-				m.workers[workerID] = WorkerState{Status: WorkerIdle}
-			}
-		}
-
+		m.applyEvent(msg)
 		return m, m.waitForEvent()
 
 	case spinner.TickMsg:
@@ -150,6 +115,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m *Model) applyEvent(event engine.Event) {
+	workerID := event.WorkerID()
+	if workerID < 0 || workerID >= len(m.workers) {
+		return
+	}
+	worker := &m.workers[workerID]
+
+	switch e := event.(type) {
+	case engine.JobStarted:
+		*worker = WorkerState{Status: WorkerRunning, JobId: e.Job, LastLog: "starting..."}
+	case engine.JobPhase:
+		worker.Phase = e.Phase
+		if e.Phase != "" {
+			worker.LastLog = ""
+		}
+	case engine.JobLog:
+		worker.LastLog = e.Line
+	case engine.JobProgress:
+		progress := e.Progress
+		worker.Progress = &progress
+	case engine.JobEnded:
+		m.addCompleted(CompletedJob{
+			Label:   e.Job,
+			Success: e.Success,
+			Error:   e.Err,
+			LastLog: worker.LastLog,
+		})
+		*worker = WorkerState{Status: WorkerIdle}
+	}
 }
 
 func (m *Model) addCompleted(job CompletedJob) {

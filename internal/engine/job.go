@@ -10,8 +10,32 @@ import (
 	"github.com/medialo/gogws/internal/git"
 )
 
-// Notify represent a func that can be call inside a job to send event
-type Notify func(eventType EventType, log string)
+type Notify struct {
+	send func(Event)
+	base eventBase
+}
+
+func NewNotify(worker int, job string, send func(Event)) Notify {
+	return Notify{send: send, base: eventBase{Worker: worker, Job: job}}
+}
+
+func (n Notify) emit(e Event) {
+	if n.send != nil {
+		n.send(e)
+	}
+}
+
+func (n Notify) Log(line string) {
+	n.emit(JobLog{eventBase: n.base, Line: line})
+}
+
+func (n Notify) Phase(phase string) {
+	n.emit(JobPhase{eventBase: n.base, Phase: phase})
+}
+
+func (n Notify) Progress(p Progress) {
+	n.emit(JobProgress{eventBase: n.base, Progress: p})
+}
 
 type JobFunction func(ctx context.Context, notify Notify) error
 
@@ -40,12 +64,12 @@ func Wrap(cmd *exec.Cmd) *NotifiableCmd {
 
 func (nc *NotifiableCmd) Run(ctx context.Context, notify Notify) error {
 	var buf bytes.Buffer
-	progress := func(line string) { notify(EventJobProgress, line) }
-	stdout := &lineNotifyWriter{notify: func(s string) { notify(EventJobLog, s) }, progress: progress}
+	progress := notify.Progress
+	stdout := &lineNotifyWriter{notify: notify.Log, progress: progress}
 	stderr := &lineNotifyWriter{notify: func(s string) {
 		buf.WriteString(s)
 		buf.WriteString("\n")
-		notify(EventJobLog, s)
+		notify.Log(s)
 	}, progress: progress}
 	nc.cmd.Stdout = stdout
 	nc.cmd.Stderr = stderr
@@ -86,7 +110,7 @@ const progressInterval = 100 * time.Millisecond
 
 type lineNotifyWriter struct {
 	notify       func(string)
-	progress     func(string)
+	progress     func(Progress)
 	buf          []byte
 	now          func() time.Time
 	lastProgress time.Time
@@ -121,7 +145,7 @@ func (lnw *lineNotifyWriter) line(line string, carriageReturn bool) {
 			if p.Phase != lnw.lastPhase || p.Percent != lnw.lastPercent {
 				lnw.lastPhase = p.Phase
 				lnw.lastPercent = p.Percent
-				lnw.progress(line)
+				lnw.progress(p)
 			}
 			return
 		}

@@ -9,6 +9,48 @@ import (
 	"time"
 )
 
+func TestRunJobs_EmitsTypedEventSequence(t *testing.T) {
+	job := NewJob("api", func(ctx context.Context, notify Notify) error {
+		notify.Log("fetching")
+		notify.Phase("hook post-ff")
+		notify.Progress(Progress{Phase: "Receiving objects", Percent: 50, Current: 5, Total: 10})
+		return errors.New("boom")
+	})
+
+	events, resultCh := NewEngine(DefaultOptions().WithParallel(1)).RunJobs(context.Background(), []Job{job})
+	var kinds []string
+	for event := range events {
+		if event.JobID() != "api" || event.WorkerID() != 0 {
+			t.Fatalf("event %T has job %q worker %d", event, event.JobID(), event.WorkerID())
+		}
+		switch e := event.(type) {
+		case JobStarted:
+			kinds = append(kinds, "start")
+		case JobLog:
+			kinds = append(kinds, "log:"+e.Line)
+		case JobPhase:
+			kinds = append(kinds, "phase:"+e.Phase)
+		case JobProgress:
+			kinds = append(kinds, fmt.Sprintf("progress:%s:%d", e.Phase, e.Percent))
+		case JobEnded:
+			kinds = append(kinds, fmt.Sprintf("end:%v:%v", e.Success, e.Err))
+		}
+	}
+	<-resultCh
+
+	want := "start|log:fetching|phase:hook post-ff|progress:Receiving objects:50|end:false:boom"
+	if strings.Join(kinds, "|") != want {
+		t.Fatalf("events = %v, want %s", kinds, want)
+	}
+}
+
+func TestNotify_ZeroValueIsNoop(t *testing.T) {
+	var notify Notify
+	notify.Log("ignored")
+	notify.Phase("ignored")
+	notify.Progress(Progress{})
+}
+
 func TestRunJobs_CollectsEveryResultConcurrently(t *testing.T) {
 	const nbJobs = 200
 	jobs := make([]Job, 0, nbJobs)
