@@ -67,6 +67,7 @@ type ConfigFile struct {
 	StopOnError       *bool    `yaml:"stop-on-error,omitempty"`
 	ProviderCacheTTL  string   `yaml:"provider-cache-ttl,omitempty"`
 	TrustedWorkspaces []string `yaml:"trusted-workspaces,omitempty"`
+	UpdateCheck       *bool    `yaml:"update-check,omitempty"`
 }
 
 func SetPreference(key, raw string) error {
@@ -101,6 +102,9 @@ func SetPreference(key, raw string) error {
 		file.StopOnError = &b
 	case KeyProviderCacheTTL:
 		file.ProviderCacheTTL = raw
+	case KeyUpdateCheck:
+		b, _ := strconv.ParseBool(raw)
+		file.UpdateCheck = &b
 	}
 
 	return saveConfigFile(file)

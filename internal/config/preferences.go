@@ -40,6 +40,7 @@ const (
 	KeyStopOnError       = "stop-on-error"
 	KeyProviderCacheTTL  = "provider-cache-ttl"
 	KeyTrustedWorkspaces = "trusted-workspaces"
+	KeyUpdateCheck       = "update-check"
 
 	DefaultFormat           = "text"
 	DefaultProviderCacheTTL = "24h"
@@ -55,6 +56,7 @@ type Preferences struct {
 	StopOnError       ConfigValue[bool]
 	ProviderCacheTTL  ConfigValue[time.Duration]
 	TrustedWorkspaces ConfigValue[[]string]
+	UpdateCheck       ConfigValue[bool]
 }
 
 type PreferenceKey struct {
@@ -72,6 +74,7 @@ var PreferenceKeys = []PreferenceKey{
 	{KeyNoColor, "boolean", false, "Disable colored output", validateBoolText},
 	{KeyStopOnError, "boolean", false, "Stop execution on first error", validateBoolText},
 	{KeyProviderCacheTTL, "duration", DefaultProviderCacheTTL, "How long a discovered provider workspace is kept before --refresh-providers re-reads it", validateDurationText},
+	{KeyUpdateCheck, "boolean", true, "Check once a day whether a newer gogws release is available", validateBoolText},
 	{KeyTrustedWorkspaces, "list of paths", []string{}, "Deprecated, no longer grants trust. Local hooks are trusted per file (path + sha256) in ~/.gws/" + TrustedHooksFile, nil},
 }
 
@@ -199,6 +202,12 @@ func LoadPreferences(flags *pflag.FlagSet, configFile string) (*Preferences, err
 		return nil, r.invalid(KeyProviderCacheTTL, errors.New("must be a duration (e.g. 30m, 12h)"))
 	}
 	prefs.ProviderCacheTTL = ConfigValue[time.Duration]{Value: ttl, Source: r.sourceOf(KeyProviderCacheTTL)}
+
+	updateCheck, err := cast.ToBoolE(v.Get(KeyUpdateCheck))
+	if err != nil {
+		return nil, r.invalid(KeyUpdateCheck, errors.New("must be true or false"))
+	}
+	prefs.UpdateCheck = ConfigValue[bool]{Value: updateCheck, Source: r.sourceOf(KeyUpdateCheck)}
 
 	return prefs, nil
 }

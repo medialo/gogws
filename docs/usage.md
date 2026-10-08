@@ -139,5 +139,5 @@ gogws config list                       # available keys
 gogws config get provider-cache-ttl
 gogws config set provider-cache-ttl 12h
 gogws completion bash|zsh|fish|powershell
-gogws version
+gogws --version                         # prints only the version on stdout, always checks for a newer release
 ```

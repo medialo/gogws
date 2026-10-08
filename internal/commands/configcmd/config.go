@@ -90,6 +90,8 @@ func displayValue(prefs *config.Preferences, key string) (any, config.ConfigSour
 		return prefs.StopOnError.Value, prefs.StopOnError.Source, true
 	case config.KeyProviderCacheTTL:
 		return prefs.ProviderCacheTTL.Value, prefs.ProviderCacheTTL.Source, true
+	case config.KeyUpdateCheck:
+		return prefs.UpdateCheck.Value, prefs.UpdateCheck.Source, true
 	case config.KeyTrustedWorkspaces:
 		return formatValue(prefs.TrustedWorkspaces.Value), prefs.TrustedWorkspaces.Source, true
 	default:

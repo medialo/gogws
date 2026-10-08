@@ -21,17 +21,16 @@ import (
 	"github.com/medialo/gogws/internal/commands/search"
 	"github.com/medialo/gogws/internal/commands/status"
 	"github.com/medialo/gogws/internal/commands/update"
-	"github.com/medialo/gogws/internal/commands/version"
 	"github.com/spf13/cobra"
 )
 
 func Execute() error {
 	slog.Debug("Starting gogws")
 	rootCmd := root.NewCommand()
+	root.SetVersion(Current())
 
 	statusCmd := status.NewCommand(root.GetRunContext)
 
-	rootCmd.AddCommand(version.NewCommand())
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(clone.NewCommand(root.GetRunContext))
 	rootCmd.AddCommand(fetch.NewCommand(root.GetRunContext))
@@ -46,6 +45,9 @@ func Execute() error {
 	rootCmd.AddCommand(search.NewCommand(root.GetRunContext))
 
 	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
+		if root.VersionRequested() {
+			return Print(cmd.OutOrStdout())
+		}
 		return statusCmd.RunE(cmd, args)
 	}
 
@@ -58,5 +60,7 @@ func Execute() error {
 		os.Exit(1)
 	}()
 
-	return fang.Execute(context.Background(), rootCmd, fang.WithVersion(version.Current()), fang.WithCommit(version.Commit))
+	err := fang.Execute(context.Background(), rootCmd, fang.WithoutVersion())
+	root.PrintUpdateNotice()
+	return err
 }

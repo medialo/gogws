@@ -16,8 +16,8 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/medialo/gogws/internal/commands/version.Version={{.Version}}
-      - -X github.com/medialo/gogws/internal/commands/version.Commit={{.Commit}}
+      - -X github.com/medialo/gogws/internal/commands.Version={{.Version}}
+      - -X github.com/medialo/gogws/internal/commands.Commit={{.Commit}}
 
 scoops:
   - name: gogws

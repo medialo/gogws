@@ -89,3 +89,36 @@ func TestAddTrustedWorkspaceIsIdempotent(t *testing.T) {
 		t.Errorf("trusted-workspaces = %v", file.TrustedWorkspaces)
 	}
 }
+
+func TestUpdateCheckPreference(t *testing.T) {
+	useTempHome(t)
+	clearPreferenceEnv(t)
+
+	prefs, err := LoadPreferences(nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !prefs.UpdateCheck.Value || prefs.UpdateCheck.Source != SourceDefault {
+		t.Fatalf("default update-check = %v (%s), want true (default)", prefs.UpdateCheck.Value, prefs.UpdateCheck.Source)
+	}
+
+	if err := SetPreference(KeyUpdateCheck, "false"); err != nil {
+		t.Fatal(err)
+	}
+	prefs, err = LoadPreferences(nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prefs.UpdateCheck.Value || prefs.UpdateCheck.Source != SourceFile {
+		t.Fatalf("file update-check = %v (%s), want false (file)", prefs.UpdateCheck.Value, prefs.UpdateCheck.Source)
+	}
+
+	t.Setenv(EnvVarName(KeyUpdateCheck), "true")
+	prefs, err = LoadPreferences(nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !prefs.UpdateCheck.Value || prefs.UpdateCheck.Source != SourceEnv {
+		t.Fatalf("env update-check = %v (%s), want true (env)", prefs.UpdateCheck.Value, prefs.UpdateCheck.Source)
+	}
+}
