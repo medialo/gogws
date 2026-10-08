@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/gws2/loader"
 
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gitignore"
@@ -56,16 +55,14 @@ func preRunInitProjects(getConfig func() *config.RunContext) error {
 			return nil
 		}
 		slog.Debug("Resetting .projects.gws config", "resetProjectsGwsFile", resetProjectsGwsFile)
-		fileLocation, err := gws2.DeleteProjectsFile(cfg.WorkspaceRoot)
+		fileLocation, err := loader.ClearProjects(cfg.WorkspaceRoot)
 
 		if fileLocation != "" {
-			lipgloss.Println(renderer.RenderWarning("Removing projects configuration file..."))
+			lipgloss.Println(renderer.RenderWarning("Removing projects configuration..."))
 			if err != nil {
-				return fmt.Errorf("failed to remove configuration %s: %w", fileLocation, err)
+				return fmt.Errorf("failed to reset projects in %s: %w", fileLocation, err)
 			}
-			lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Projects configuration file removed")))
-		} else {
-			lipgloss.Println(renderer.RenderError(fmt.Sprintf("%s already exists. Use --reset to reinitialize", gws2.ProjectsFileName)))
+			lipgloss.Println(renderer.RenderSuccess("Projects configuration removed"))
 		}
 	}
 	return nil
@@ -99,34 +96,18 @@ func runInitProjects() error {
 
 	renderer := cli.NewRenderer()
 
-	gwsDir := filepath.Join(workspaceRoot, gws2.ConfigDirName)
-	if err := os.MkdirAll(gwsDir, 0755); err != nil {
-		return fmt.Errorf("failed to create %s directory: %w", gws2.ConfigDirName, err)
+	ws, err := loader.NewFromPath(workspaceRoot).RunDoctor(false).Recursive(false).Load()
+	if err != nil {
+		return fmt.Errorf("failed to resolve workspace: %w", err)
 	}
 
-	projectsFile := filepath.Join(gwsDir, gws2.ProjectsFileNameInDir)
-	legacyProjectsFile := filepath.Join(workspaceRoot, gws2.ProjectsFileName)
-
-	fileExists := false
-	if _, err := os.Stat(projectsFile); err == nil {
-		fileExists = true
-	} else if _, err := os.Stat(legacyProjectsFile); err == nil {
-		fileExists = true
-		projectsFile = legacyProjectsFile
-	}
-
-	if fileExists {
-		if resetProjectsGwsFile {
-			lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("Removing existing %s", projectsFile)))
-			if err := os.Remove(projectsFile); err != nil {
-				return fmt.Errorf("failed to remove existing %s: %w", projectsFile, err)
-			}
-			lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Removed existing %s", projectsFile)))
-			projectsFile = filepath.Join(gwsDir, gws2.ProjectsFileNameInDir)
-		} else {
-			lipgloss.Println(renderer.RenderError(fmt.Sprintf("projects.%s already exists. Use --reset to reinitialize", gws2.FileExtension)))
+	if len(ws.Projects) > 0 {
+		if !resetProjectsGwsFile {
+			lipgloss.Println(renderer.RenderError("Projects are already configured. Use --reset to reinitialize"))
 			return nil
 		}
+		ws.Projects = ws.Projects[:0]
+		ws.ReindexAll()
 	}
 
 	lipgloss.Println(renderer.RenderInfo("Scanning workspace for git repositories..."))
@@ -143,32 +124,19 @@ func runInitProjects() error {
 
 	slog.Debug("Found repositories", "count", len(discovered))
 
-	projects := make([]*gws2.Project, len(discovered))
-	for i, d := range discovered {
-		projects[i] = gws2.NewProject(workspaceRoot, d.Path, d.Remotes)
-	}
-	lipgloss.Println(renderer.RenderProjectsList(projects))
-
-	file, err := os.Create(projectsFile)
-	if err != nil {
-		return fmt.Errorf("failed to create %s: %w", projectsFile, err)
-	}
-	defer file.Close()
-
 	var projectPaths []string
-	for _, project := range projects {
+	for _, d := range discovered {
+		project := gws2.NewProject(workspaceRoot, d.Path, d.Remotes)
+		ws.AddProject(project)
 		projectPaths = append(projectPaths, project.RelativePath)
-		var remoteParts []string
-		for _, remote := range project.Remotes {
-			remoteParts = append(remoteParts, fmt.Sprintf("%s %s", remote.URL, remote.Name))
-		}
-		line := fmt.Sprintf("%s | %s\n", project.RelativePath, strings.Join(remoteParts, " | "))
-		if _, err := file.WriteString(line); err != nil {
-			return fmt.Errorf("failed to write to %s: %w", projectsFile, err)
-		}
+	}
+	lipgloss.Println(renderer.RenderProjectsList(ws.Projects))
+
+	if err := ws.SaveProjects(); err != nil {
+		return fmt.Errorf("failed to save projects: %w", err)
 	}
 
-	lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Created %s with %d repositories", projectsFile, len(projects))))
+	lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Created projects configuration (%s) with %d repositories", ws.Config().Format().Name(), len(ws.Projects))))
 
 	if err := hooks.PostInit(workspaceRoot, projectPaths); err != nil {
 		return fmt.Errorf("post-init hook failed: %w", err)

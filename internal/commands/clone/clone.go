@@ -14,6 +14,7 @@ import (
 	"github.com/medialo/gogws/internal/engine"
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/gws2/loader"
 	"github.com/medialo/gogws/internal/hooks"
 	"github.com/medialo/gogws/internal/ui/cli"
 	engineui "github.com/medialo/gogws/internal/ui/engineui"
@@ -42,7 +43,7 @@ func runClone(getConfig func() *config.RunContext, args []string) error {
 
 	slog.Debug("Running clone command", "workspace", cfg.WorkspaceRoot)
 
-	ws, err := gws2.NewFromPath(cfg.WorkspaceRoot).Recursive(false).Load()
+	ws, err := loader.NewFromPath(cfg.WorkspaceRoot).Recursive(false).Load()
 	if err != nil {
 		return fmt.Errorf("failed to load projects: %w", err)
 	}

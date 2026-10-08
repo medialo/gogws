@@ -10,6 +10,7 @@ import (
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gitignore"
 	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/gws2/loader"
 	"github.com/medialo/gogws/internal/ui/cli"
 	"github.com/medialo/gogws/internal/ui/prompt"
 
@@ -53,16 +54,14 @@ func preRunInitWorkspaces(getConfig func() *config.RunContext) error {
 			return nil
 		}
 		slog.Debug("Resetting workspaces.gws file", "resetWorkspacesGwsFile", resetWorkspacesGwsFile)
-		fileLocation, err := gws2.DeleteWorkspacesFile(cfg.WorkspaceRoot)
+		fileLocation, err := loader.ClearWorkspaces(cfg.WorkspaceRoot)
 
 		if fileLocation != "" {
-			lipgloss.Println(renderer.RenderWarning("Removing workspaces configuration file..."))
+			lipgloss.Println(renderer.RenderWarning("Removing workspaces configuration..."))
 			if err != nil {
-				return fmt.Errorf("failed to remove existing %s: %w", fileLocation, err)
+				return fmt.Errorf("failed to reset workspaces in %s: %w", fileLocation, err)
 			}
-			lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Workspaces configuration file removed")))
-		} else {
-			lipgloss.Println(renderer.RenderError(fmt.Sprintf("%s already exists. Use --reset to reinitialize", gws2.WorkspacesFileName)))
+			lipgloss.Println(renderer.RenderSuccess("Workspaces configuration removed"))
 		}
 	}
 	return nil
@@ -122,7 +121,7 @@ func runInitWorkspaces() error {
 		return nil
 	}
 
-	root, err := gws2.NewFromPath(workspaceRoot).RunDoctor(false).Recursive(false).Load()
+	root, err := loader.NewFromPath(workspaceRoot).RunDoctor(false).Recursive(false).Load()
 	if err != nil {
 		return fmt.Errorf("failed to resolve workspace: %w", err)
 	}

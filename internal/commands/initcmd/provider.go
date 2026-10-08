@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"charm.land/lipgloss/v2"
-	"github.com/medialo/gogws/internal/config"
-	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/gws2/loader"
 	"github.com/medialo/gogws/internal/hooks"
 	"github.com/medialo/gogws/internal/providers"
 	"github.com/medialo/gogws/internal/ui/cli"
@@ -16,7 +14,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newProviderCommand(getConfig func() *config.RunContext) *cobra.Command {
+func newProviderCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "provider [github:org|gitlab:group|gitlab-graphql:group]",
 		Short: "Initialize a workspace from a git provider organization/group",
@@ -56,30 +54,22 @@ func runInitProvider(url string) error {
 
 	renderer := cli.NewRenderer()
 
-	gwsDir := filepath.Join(workspaceRoot, gws2.ConfigDirName)
-	exists := fileExistsAny(
-		filepath.Join(gwsDir, gws2.ProjectsFileNameInDir),
-		filepath.Join(workspaceRoot, gws2.ProjectsFileName),
-		filepath.Join(gwsDir, gws2.WorkspacesFileNameInDir),
-		filepath.Join(workspaceRoot, gws2.WorkspacesFileName),
-	)
-
-	if exists {
+	if loader.IsWorkspace(workspaceRoot) {
 		if !resetProjectsGwsFile {
-			lipgloss.Println(renderer.RenderError("workspace already has .projects.gws/.workspaces.gws. Use --reset to reinitialize"))
+			lipgloss.Println(renderer.RenderError("workspace is already configured. Use --reset to reinitialize"))
 			return nil
 		}
-		if fileLocation, err := gws2.DeleteProjectsFile(workspaceRoot); fileLocation != "" {
+		if fileLocation, err := loader.ClearProjects(workspaceRoot); fileLocation != "" {
 			if err != nil {
-				return fmt.Errorf("failed to remove existing %s: %w", fileLocation, err)
+				return fmt.Errorf("failed to reset projects in %s: %w", fileLocation, err)
 			}
-			lipgloss.Println(renderer.RenderSuccess("Removed existing .projects.gws"))
+			lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Removed existing projects from %s", fileLocation)))
 		}
-		if fileLocation, err := gws2.DeleteWorkspacesFile(workspaceRoot); fileLocation != "" {
+		if fileLocation, err := loader.ClearWorkspaces(workspaceRoot); fileLocation != "" {
 			if err != nil {
-				return fmt.Errorf("failed to remove existing %s: %w", fileLocation, err)
+				return fmt.Errorf("failed to reset workspaces in %s: %w", fileLocation, err)
 			}
-			lipgloss.Println(renderer.RenderSuccess("Removed existing .workspaces.gws"))
+			lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Removed existing workspaces from %s", fileLocation)))
 		}
 	}
 
@@ -99,7 +89,7 @@ func runInitProvider(url string) error {
 		return nil
 	}
 
-	root := gws2.NewRootWorkspace(workspaceRoot)
+	root := loader.NewRootWorkspace(workspaceRoot)
 	if err := providers.Materialize(root, provider, group); err != nil {
 		return fmt.Errorf("failed to write workspace files: %w", err)
 	}
@@ -120,13 +110,4 @@ func runInitProvider(url string) error {
 	}
 
 	return nil
-}
-
-func fileExistsAny(paths ...string) bool {
-	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
-			return true
-		}
-	}
-	return false
 }

@@ -4,15 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/medialo/gogws/internal/git"
 )
-
-type ConfigFile struct {
-	Path   string
-	Legacy bool
-}
 
 type Repository interface {
 	Id() int
@@ -61,16 +55,11 @@ func (e *Entry) Index() *Index {
 	return e.index
 }
 
-// setIndex attaches the shared path index. Unexported: only the loader and
-// AddProject/AddWorkspace are expected to wire this up.
-func (e *Entry) setIndex(idx *Index) {
+func (e *Entry) AttachIndex(idx *Index) {
 	e.index = idx
 }
 
-// effectivePath returns RelativePath if set, else AbsolutePath — used when
-// writing an entry back to its .gws config file so a save never leaks a
-// machine-specific absolute path.
-func (e *Entry) effectivePath() string {
+func (e *Entry) ConfigPath() string {
 	if e.RelativePath != "" {
 		return e.RelativePath
 	}
@@ -96,23 +85,27 @@ func (gr *GitRepository) GetUpstreamRemote() *git.Remote {
 	return upstreamRemote(gr.Remotes)
 }
 
-func (gr *GitRepository) formatBaseRepository() string {
-	return formatEntryLine(gr.effectivePath(), gr.Remotes)
-}
-
 type Project struct {
 	GitRepository
 }
 
 type Workspace struct {
 	Entry
-	Remotes             []*git.Remote // nil for a plain folder workspace, populated for a git-backed sub-workspace
-	Error               error
-	Projects            []*Project
-	Children            []*Workspace
-	SelfEntry           *Workspace
-	WorkspaceConfigFile *ConfigFile
-	ProjectConfigFile   *ConfigFile
+	Remotes   []*git.Remote // nil for a plain folder workspace, populated for a git-backed sub-workspace
+	Error     error
+	Projects  []*Project
+	Children  []*Workspace
+	SelfEntry *Workspace
+	Settings  Settings
+	config    WorkspaceConfig
+}
+
+func (w *Workspace) BindConfig(config WorkspaceConfig) {
+	w.config = config
+}
+
+func (w *Workspace) Config() WorkspaceConfig {
+	return w.config
 }
 
 func (w *Workspace) IsGitRepository() bool {
@@ -127,10 +120,6 @@ func (w *Workspace) GetUpstreamRemote() *git.Remote {
 	return upstreamRemote(w.Remotes)
 }
 
-func (w *Workspace) formatBaseRepository() string {
-	return formatEntryLine(w.effectivePath(), w.Remotes)
-}
-
 func originRemote(remotes []*git.Remote) *git.Remote {
 	if len(remotes) > 0 {
 		return remotes[0]
@@ -143,24 +132,6 @@ func upstreamRemote(remotes []*git.Remote) *git.Remote {
 		return remotes[1]
 	}
 	return nil
-}
-
-// formatEntryLine renders one .gws config line for path given its remotes.
-// A folder entry (no remotes) round-trips via the literal "folder" marker
-// that parseWorkspaceLine recognizes.
-func formatEntryLine(path string, remotes []*git.Remote) string {
-	if len(remotes) == 0 {
-		return fmt.Sprintf("%s | folder", path)
-	}
-	var remoteParts []string
-	for _, remote := range remotes {
-		if remote.Name == "origin" {
-			remoteParts = append(remoteParts, remote.URL)
-		} else {
-			remoteParts = append(remoteParts, fmt.Sprintf("%s %s", remote.URL, remote.Name))
-		}
-	}
-	return fmt.Sprintf("%s | %s", path, strings.Join(remoteParts, " | "))
 }
 
 func NewRootWorkspace(path string) *Workspace {
@@ -269,17 +240,23 @@ func (w *Workspace) FlattenRepositories() []Repository {
 
 func (w *Workspace) AddWorkspace(childWorkspace *Workspace) {
 	w.Children = append(w.Children, childWorkspace)
+	if childWorkspace.id == 0 {
+		childWorkspace.id = len(w.Children)
+	}
 	if idx := w.Index(); idx != nil {
-		childWorkspace.setIndex(idx)
-		idx.put(childWorkspace)
+		childWorkspace.AttachIndex(idx)
+		idx.Register(childWorkspace)
 	}
 }
 
 func (w *Workspace) AddProject(project *Project) {
 	w.Projects = append(w.Projects, project)
+	if project.id == 0 {
+		project.id = len(w.Projects)
+	}
 	if idx := w.Index(); idx != nil {
-		project.setIndex(idx)
-		idx.put(project)
+		project.AttachIndex(idx)
+		idx.Register(project)
 	}
 }
 
@@ -296,9 +273,9 @@ func (w *Workspace) RemoveProject(path string) *Workspace {
 }
 
 func (w *Workspace) removeProjectAnywhere(path string) *Workspace {
-	key := pathKey(path)
+	key := PathKey(path)
 	for i, p := range w.Projects {
-		if pathKey(p.AbsolutePath) == key {
+		if PathKey(p.AbsolutePath) == key {
 			w.Projects = append(w.Projects[:i], w.Projects[i+1:]...)
 			return w
 		}
@@ -325,9 +302,9 @@ func (w *Workspace) RemoveWorkspace(path string) *Workspace {
 }
 
 func (w *Workspace) removeWorkspaceAnywhere(path string) *Workspace {
-	key := pathKey(path)
+	key := PathKey(path)
 	for i, c := range w.Children {
-		if pathKey(c.AbsolutePath) == key {
+		if PathKey(c.AbsolutePath) == key {
 			w.Children = append(w.Children[:i], w.Children[i+1:]...)
 			return w
 		}
@@ -342,7 +319,7 @@ func (w *Workspace) removeWorkspaceAnywhere(path string) *Workspace {
 
 func (w *Workspace) ReindexAll() {
 	if w.Index() == nil {
-		w.setIndex(NewIndex())
+		w.AttachIndex(NewIndex())
 	}
 	w.Index().Rebuild(w)
 }
@@ -360,60 +337,17 @@ func (w *Workspace) SaveAll() error {
 }
 
 func (w *Workspace) SaveWorkspace() error {
-	_, workspaceConfigLocation := getWorkspacesConfigFileLocation(w.AbsolutePath)
-
-	if err := os.MkdirAll(filepath.Dir(workspaceConfigLocation.Path), 0755); err != nil {
-		return fmt.Errorf("failed to create %s directory: %w", ConfigDirName, err)
+	if w.config == nil {
+		return fmt.Errorf("workspace %s has no configuration", w.AbsolutePath)
 	}
-
-	file, err := os.OpenFile(workspaceConfigLocation.Path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open workspaces file: %w", err)
-	}
-	defer file.Close()
-
-	lines := make([]string, 0, len(w.Children)+1)
-
-	if w.SelfEntry != nil {
-		lines = append(lines, w.SelfEntry.formatBaseRepository())
-	}
-	for _, ws := range w.Children {
-		lines = append(lines, ws.formatBaseRepository())
-	}
-
-	_, err = file.WriteString(strings.Join(lines, "\n"))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return w.config.WriteWorkspaces(w)
 }
 
 func (w *Workspace) SaveProjects() error {
-	_, projectConfigLocation := getProjectsConfigFileLocation(w.AbsolutePath)
-
-	if err := os.MkdirAll(filepath.Dir(projectConfigLocation.Path), 0755); err != nil {
-		return fmt.Errorf("failed to create %s directory: %w", ConfigDirName, err)
+	if w.config == nil {
+		return fmt.Errorf("workspace %s has no configuration", w.AbsolutePath)
 	}
-
-	file, err := os.OpenFile(projectConfigLocation.Path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open projects file: %w", err)
-	}
-	defer file.Close()
-
-	lines := make([]string, 0, len(w.Projects))
-
-	for _, project := range w.Projects {
-		lines = append(lines, project.formatBaseRepository())
-	}
-
-	_, err = file.WriteString(strings.Join(lines, "\n"))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return w.config.WriteProjects(w)
 }
 
 func (w *Workspace) MissingWorkspaces() []*Workspace {

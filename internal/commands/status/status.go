@@ -12,6 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/export"
 	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/gws2/loader"
 	"github.com/medialo/gogws/internal/view"
 
 	"github.com/medialo/gogws/internal/config"
@@ -44,7 +45,7 @@ func runStatus(getConfig func() *config.RunContext) error {
 
 	slog.Debug("Running status command", "workspace", cfg.WorkspaceRoot)
 
-	ws2, err := gws2.NewFromPath(cfg.WorkspaceRoot).Load()
+	ws2, err := loader.NewFromPath(cfg.WorkspaceRoot).Load()
 	if err != nil {
 		return err
 	}

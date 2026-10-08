@@ -225,7 +225,7 @@ func (w *Workspace) IsValid() bool {
 func hasDuplicate[T Repository](repositories []T) CheckResult {
 	seen := make(map[string]struct{}, len(repositories))
 	for _, r := range repositories {
-		key := pathKey(r.GetPath())
+		key := PathKey(r.GetPath())
 		if _, exists := seen[key]; exists {
 			return Failed
 		}
@@ -248,7 +248,7 @@ func fixDuplicateWorkspaces(w *Workspace) error {
 	seen := make(map[string]struct{}, len(w.Children))
 	deduped := w.Children[:0]
 	for _, c := range w.Children {
-		key := pathKey(c.AbsolutePath)
+		key := PathKey(c.AbsolutePath)
 		if _, exists := seen[key]; exists {
 			continue
 		}
@@ -267,7 +267,7 @@ func fixDuplicateProjects(w *Workspace) error {
 	seen := make(map[string]struct{}, len(w.Projects))
 	deduped := w.Projects[:0]
 	for _, p := range w.Projects {
-		key := pathKey(p.AbsolutePath)
+		key := PathKey(p.AbsolutePath)
 		if _, exists := seen[key]; exists {
 			continue
 		}

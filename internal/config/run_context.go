@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/gws2/loader"
 	"golang.org/x/term"
 )
 
@@ -38,7 +38,7 @@ func Initialize(prefs *Preferences, onlyChanges bool, workingDir string) error {
 	}
 
 	// todo is -d use to find root or if -d is present, is considered as root without check
-	root, err := gws2.FindRoot()
+	root, err := loader.FindRoot()
 	if err != nil {
 		return err
 	}

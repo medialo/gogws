@@ -8,6 +8,7 @@ import (
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/gws2/loader"
 	"github.com/medialo/gogws/internal/ui/cli"
 
 	"github.com/spf13/cobra"
@@ -36,7 +37,7 @@ func runAddProject(getConfig func() *config.RunContext, args []string) error {
 		return fmt.Errorf("no workspace found (no .projects.gws file)")
 	}
 
-	ws, err := gws2.NewFromPath(cfg.WorkspaceRoot).RunDoctor(false).Recursive(false).Load()
+	ws, err := loader.NewFromPath(cfg.WorkspaceRoot).RunDoctor(false).Recursive(false).Load()
 	if err != nil {
 		return fmt.Errorf("failed to resolve workspace: %w", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/medialo/gogws/internal/engine"
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/gws2/loader"
 	"github.com/medialo/gogws/internal/hooks"
 	"github.com/medialo/gogws/internal/providers"
 	"github.com/medialo/gogws/internal/ui/cli"
@@ -85,7 +86,7 @@ func runUpdate(getConfig func() *config.RunContext) error {
 
 	for pass := 0; ; pass++ {
 		slog.Debug(fmt.Sprintf("Running update command in workspace: %s", cfg.WorkspaceRoot), "pass", pass)
-		ws, err := gws2.NewFromPath(cfg.WorkspaceRoot).Load()
+		ws, err := loader.NewFromPath(cfg.WorkspaceRoot).Load()
 		if err != nil {
 			return fmt.Errorf("failed to resolve workspace: %w", err)
 		}
@@ -159,12 +160,12 @@ func runUpdate(getConfig func() *config.RunContext) error {
 		// left alone.
 		for owner := range workspaceOwners {
 			if err := owner.SaveWorkspace(); err != nil {
-				return fmt.Errorf("failed to update %s after pruning: %w", gws2.WorkspacesFileName, err)
+				return fmt.Errorf("failed to update workspaces configuration after pruning: %w", err)
 			}
 		}
 		for owner := range projectOwners {
 			if err := owner.SaveProjects(); err != nil {
-				return fmt.Errorf("failed to update %s after pruning: %w", gws2.ProjectsFileName, err)
+				return fmt.Errorf("failed to update projects configuration after pruning: %w", err)
 			}
 		}
 
@@ -182,7 +183,7 @@ func runUpdate(getConfig func() *config.RunContext) error {
 	}
 
 	if !noProviderDiscovery && (refreshProviders || forceRefreshProviders) {
-		ws, err := gws2.NewFromPath(cfg.WorkspaceRoot).Load()
+		ws, err := loader.NewFromPath(cfg.WorkspaceRoot).Load()
 		if err != nil {
 			return fmt.Errorf("failed to resolve workspace: %w", err)
 		}

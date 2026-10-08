@@ -8,6 +8,7 @@ import (
 
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/gws2/format/gws"
 )
 
 type TemplateData struct {
@@ -19,10 +20,10 @@ type TemplateData struct {
 
 func DefaultData() TemplateData {
 	return TemplateData{
-		Extension:      gws2.FileExtension,
+		Extension:      gws.FileExtension,
 		ConfigDir:      gws2.ConfigDirName,
-		ProjectsFile:   gws2.ProjectsFileName,
-		WorkspacesFile: gws2.WorkspacesFileName,
+		ProjectsFile:   gws.ProjectsFileName,
+		WorkspacesFile: gws.WorkspacesFileName,
 	}
 }
 

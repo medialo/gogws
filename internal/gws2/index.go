@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-func pathKey(path string) string {
+func PathKey(path string) string {
 	clean := filepath.Clean(path)
 	if runtime.GOOS == "windows" {
 		return strings.ToLower(clean)
@@ -31,7 +31,7 @@ func (idx *Index) Get(path string) (Repository, bool) {
 	}
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
-	repo, ok := idx.byPath[pathKey(path)]
+	repo, ok := idx.byPath[PathKey(path)]
 	return repo, ok
 }
 
@@ -40,13 +40,13 @@ func (idx *Index) Has(path string) bool {
 	return ok
 }
 
-func (idx *Index) put(repo Repository) {
+func (idx *Index) Register(repo Repository) {
 	if idx == nil || repo == nil {
 		return
 	}
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
-	idx.byPath[pathKey(repo.GetPath())] = repo
+	idx.byPath[PathKey(repo.GetPath())] = repo
 }
 
 // SearchByName returns every Repository (project or workspace) whose name
@@ -104,9 +104,9 @@ func (idx *Index) Rebuild(root *Workspace) {
 }
 
 func (idx *Index) indexTree(w *Workspace) {
-	idx.put(w)
+	idx.Register(w)
 	for _, p := range w.Projects {
-		idx.put(p)
+		idx.Register(p)
 	}
 	for _, c := range w.Children {
 		idx.indexTree(c)

@@ -3,13 +3,11 @@ package initcmd
 import (
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 
 	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/gitignore"
-	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/gws2/loader"
 	"github.com/medialo/gogws/internal/ui/cli"
 
 	"github.com/spf13/cobra"
@@ -45,7 +43,7 @@ Running 'gogws init' without subcommand is equivalent to 'gogws init projects'.`
 
 	cmd.AddCommand(newProjectsCommand(getConfig))
 	cmd.AddCommand(newWorkspacesCommand(getConfig))
-	cmd.AddCommand(newProviderCommand(getConfig))
+	cmd.AddCommand(newProviderCommand())
 	cmd.AddCommand(newGitignoreCommand())
 
 	return cmd
@@ -63,32 +61,12 @@ func persistentPreInitCommand(getConfig func() *config.RunContext) error {
 			return nil
 		}
 
-		gwsDir := filepath.Join(cfg.WorkspaceRoot, gws2.ConfigDirName)
-		if err := os.MkdirAll(gwsDir, 0755); err != nil {
-			return fmt.Errorf("failed to create %s directory: %w", gws2.ConfigDirName, err)
+		fileLocation, err := loader.ClearProjects(cfg.WorkspaceRoot)
+		if err != nil {
+			return fmt.Errorf("failed to reset projects in %s: %w", fileLocation, err)
 		}
-
-		projectsFile := filepath.Join(gwsDir, "projects."+gws2.FileExtension)
-		legacyProjectsFile := filepath.Join(cfg.WorkspaceRoot, gws2.ProjectsFileName)
-
-		fileExists := false
-		if _, err := os.Stat(projectsFile); err == nil {
-			fileExists = true
-		} else if _, err := os.Stat(legacyProjectsFile); err == nil {
-			fileExists = true
-			projectsFile = legacyProjectsFile
-		}
-
-		if fileExists {
-			lipgloss.Println(renderer.RenderWarning(fmt.Sprintf("Removing existing %s", projectsFile)))
-			if err := os.Remove(projectsFile); err != nil {
-				return fmt.Errorf("failed to remove existing %s: %w", projectsFile, err)
-			}
-			lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Removed existing %s", projectsFile)))
-			projectsFile = filepath.Join(gwsDir, "projects."+gws2.FileExtension)
-		} else {
-			lipgloss.Println(renderer.RenderError(fmt.Sprintf("projects.%s already exists. Use --reset to reinitialize", gws2.FileExtension)))
-			return nil
+		if fileLocation != "" {
+			lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Removed existing projects from %s", fileLocation)))
 		}
 	}
 

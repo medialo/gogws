@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/medialo/gogws/internal/gws2"
+	"github.com/medialo/gogws/internal/gws2/loader"
 	"github.com/medialo/gogws/internal/ui/engineui"
 	"github.com/samber/lo"
 
@@ -35,7 +36,7 @@ func NewCommand(getConfig func() *config.RunContext) *cobra.Command {
 func runFF(getConfig func() *config.RunContext) error {
 	cfg := getConfig()
 	if cfg == nil {
-		return fmt.Errorf("no workspace found (no %s file)", gws2.ProjectsFileName)
+		return fmt.Errorf("no workspace found")
 	}
 
 	if err := hooks.PreFF(cfg.WorkspaceRoot); err != nil {
@@ -44,7 +45,7 @@ func runFF(getConfig func() *config.RunContext) error {
 
 	slog.Debug("Running ff command", "workspace", cfg.WorkspaceRoot)
 
-	ws, err := gws2.NewFromPath(cfg.WorkspaceRoot).Recursive(true).Load()
+	ws, err := loader.NewFromPath(cfg.WorkspaceRoot).Recursive(true).Load()
 	if err != nil {
 		return fmt.Errorf("failed to load projects: %w", err)
 	}
