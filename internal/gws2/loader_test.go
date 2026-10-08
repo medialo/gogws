@@ -43,7 +43,7 @@ func TestLoad_SelfLineIsNotAChildWorkspace(t *testing.T) {
 
 func TestLoad_MissingProjectsFileIsNotAWarning(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, ConfigDirName, WorkspacesFileName), "sub | folder\n")
+	writeFile(t, filepath.Join(root, ConfigDirName, WorkspacesFileNameInDir), "sub | folder\n")
 	if err := os.MkdirAll(filepath.Join(root, "sub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestLoad_LegacyFilesWithoutConfigDir(t *testing.T) {
 func TestLoad_ConfigDirWinsOverLegacyFiles(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, ProjectsFileName), "legacy | git@example.com:org/legacy.git\n")
-	writeFile(t, filepath.Join(root, ConfigDirName, ProjectsFileName), "api | git@example.com:org/api.git\n")
+	writeFile(t, filepath.Join(root, ConfigDirName, ProjectsFileNameInDir), "api | git@example.com:org/api.git\n")
 
 	ws, err := NewFromPath(root).Load()
 	if err != nil {
@@ -117,6 +117,39 @@ func TestFindRoot_LegacyProjectsFile(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, ProjectsFileName), "api | git@example.com:org/api.git\n")
 	sub := filepath.Join(root, "api", "src")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	previousDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousCache := cachedRootDir
+	cachedRootDir = ""
+	t.Cleanup(func() {
+		_ = os.Chdir(previousDir)
+		cachedRootDir = previousCache
+	})
+	if err := os.Chdir(sub); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := FindRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotEval, _ := filepath.EvalSymlinks(got)
+	wantEval, _ := filepath.EvalSymlinks(root)
+	if !strings.EqualFold(gotEval, wantEval) {
+		t.Fatalf("FindRoot() = %q, want %q", got, root)
+	}
+}
+
+func TestFindRoot_WorkspacesFileInConfigDir(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, ConfigDirName, WorkspacesFileNameInDir), "sub | folder\n")
+	sub := filepath.Join(root, "sub")
 	if err := os.MkdirAll(sub, 0o755); err != nil {
 		t.Fatal(err)
 	}

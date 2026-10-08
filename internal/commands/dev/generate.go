@@ -207,7 +207,7 @@ func buildName(pfx, parentPath, suffix string) string {
 }
 
 func writeProjectsFile(gwsDir string, projects []projectInfo) error {
-	filePath := filepath.Join(gwsDir, gws2.ProjectsFileName)
+	filePath := filepath.Join(gwsDir, gws2.ProjectsFileNameInDir)
 	var lines []string
 
 	for _, p := range projects {
@@ -224,7 +224,7 @@ func writeWorkspacesFile(gwsDir string, workspaces []workspaceInfo) error {
 		return nil
 	}
 
-	filePath := filepath.Join(gwsDir, gws2.WorkspacesFileName)
+	filePath := filepath.Join(gwsDir, gws2.WorkspacesFileNameInDir)
 	var lines []string
 
 	for _, w := range workspaces {

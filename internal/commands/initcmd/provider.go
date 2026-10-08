@@ -58,9 +58,9 @@ func runInitProvider(url string) error {
 
 	gwsDir := filepath.Join(workspaceRoot, gws2.ConfigDirName)
 	exists := fileExistsAny(
-		filepath.Join(gwsDir, gws2.ProjectsFileName),
+		filepath.Join(gwsDir, gws2.ProjectsFileNameInDir),
 		filepath.Join(workspaceRoot, gws2.ProjectsFileName),
-		filepath.Join(gwsDir, gws2.WorkspacesFileName),
+		filepath.Join(gwsDir, gws2.WorkspacesFileNameInDir),
 		filepath.Join(workspaceRoot, gws2.WorkspacesFileName),
 	)
 

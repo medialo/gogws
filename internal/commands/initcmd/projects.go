@@ -104,7 +104,7 @@ func runInitProjects() error {
 		return fmt.Errorf("failed to create %s directory: %w", gws2.ConfigDirName, err)
 	}
 
-	projectsFile := filepath.Join(gwsDir, gws2.ProjectsFileName)
+	projectsFile := filepath.Join(gwsDir, gws2.ProjectsFileNameInDir)
 	legacyProjectsFile := filepath.Join(workspaceRoot, gws2.ProjectsFileName)
 
 	fileExists := false
@@ -122,7 +122,7 @@ func runInitProjects() error {
 				return fmt.Errorf("failed to remove existing %s: %w", projectsFile, err)
 			}
 			lipgloss.Println(renderer.RenderSuccess(fmt.Sprintf("Removed existing %s", projectsFile)))
-			projectsFile = filepath.Join(gwsDir, gws2.ProjectsFileName)
+			projectsFile = filepath.Join(gwsDir, gws2.ProjectsFileNameInDir)
 		} else {
 			lipgloss.Println(renderer.RenderError(fmt.Sprintf("projects.%s already exists. Use --reset to reinitialize", gws2.FileExtension)))
 			return nil

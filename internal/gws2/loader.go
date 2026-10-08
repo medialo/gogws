@@ -200,7 +200,7 @@ func FindRoot() (string, error) {
 		parent := filepath.Dir(dir)
 		if parent == dir {
 			return "", fmt.Errorf("no workspace found (no %s or %s/%s file found in current or parent directories)",
-				ProjectsFileName, ConfigDirName, "projects.gws")
+				ProjectsFileName, ConfigDirName, ProjectsFileNameInDir)
 		}
 		dir = parent
 	}

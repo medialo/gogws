@@ -18,7 +18,7 @@ func hasProjectsFile(root string) bool {
 }
 
 func hasProjectsFileInConfigDir(root string) bool {
-	return hasFile(filepath.Join(root, ConfigDirName), ProjectsFileName)
+	return hasFile(filepath.Join(root, ConfigDirName), ProjectsFileNameInDir)
 }
 
 func hasWorkspacesFile(root string) bool {
@@ -26,7 +26,7 @@ func hasWorkspacesFile(root string) bool {
 }
 
 func hasWorkspacesFileInConfigDir(root string) bool {
-	return hasFile(filepath.Join(root, ConfigDirName), WorkspacesFileName)
+	return hasFile(filepath.Join(root, ConfigDirName), WorkspacesFileNameInDir)
 }
 
 func ptr[T any](v T) *T {

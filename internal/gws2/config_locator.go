@@ -32,11 +32,11 @@ func getConfigFileLocation(root string, mode FolderModer) (bool, *FileLocation) 
 func getProjectsConfigFileLocation(root string) (bool, *FileLocation) {
 	// Check for projects file in config directory first, then legacy location
 	// <root>/.gws/projects.gws
-	configDirPath := filepath.Join(root, ConfigDirName, ProjectsFileName)
+	configDirPath := filepath.Join(root, ConfigDirName, ProjectsFileNameInDir)
 	// <root>/projects.gws
 	legacyPath := filepath.Join(root, ProjectsFileName)
 
-	hasConfigDir := hasFile(filepath.Join(root, ConfigDirName), ProjectsFileName)
+	hasConfigDir := hasFile(filepath.Join(root, ConfigDirName), ProjectsFileNameInDir)
 	hasLegacy := hasFile(root, ProjectsFileName)
 
 	if hasConfigDir {
@@ -63,11 +63,11 @@ func getProjectsConfigFileLocation(root string) (bool, *FileLocation) {
 func getWorkspacesConfigFileLocation(root string) (bool, *FileLocation) {
 	// Check for workspaces file in config directory first, then legacy location
 	// <root>/.gws/workspaces.gws
-	configDirPath := filepath.Join(root, ConfigDirName, WorkspacesFileName)
+	configDirPath := filepath.Join(root, ConfigDirName, WorkspacesFileNameInDir)
 	// <root>/workspaces.gws
 	legacyPath := filepath.Join(root, WorkspacesFileName)
 
-	hasConfigDir := hasFile(filepath.Join(root, ConfigDirName), WorkspacesFileName)
+	hasConfigDir := hasFile(filepath.Join(root, ConfigDirName), WorkspacesFileNameInDir)
 	hasLegacy := hasFile(root, WorkspacesFileName)
 
 	if hasConfigDir {
