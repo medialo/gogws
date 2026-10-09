@@ -91,7 +91,8 @@ type Project struct {
 
 type Workspace struct {
 	Entry
-	Remotes   []*git.Remote // nil for a plain folder workspace, populated for a git-backed sub-workspace
+	GitRepository
+	//Remotes   []*git.Remote // nil for a plain folder workspace, populated for a git-backed sub-workspace
 	Error     error
 	Projects  []*Project
 	Children  []*Workspace

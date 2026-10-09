@@ -84,6 +84,7 @@ func runUpdate(getConfig func() *config.RunContext) error {
 	var clonedProjects []string
 	var prunedRepos []string
 	hookApprovals := hooks.NewHookApprovals()
+	failed := map[string]bool{}
 
 	for pass := 0; ; pass++ {
 		slog.Debug(fmt.Sprintf("Running update command in workspace: %s", cfg.WorkspaceRoot), "pass", pass)
@@ -97,18 +98,24 @@ func runUpdate(getConfig func() *config.RunContext) error {
 		projectOwners := map[*gws2.Workspace]bool{}
 
 		if !skipWorkspaces && len(ws.Children) > 0 {
-			missingWorkspaces := ws.MissingWorkspaces()
+			var missingWorkspaces []*gws2.Workspace
 			if recursive {
 				missingWorkspaces = ws.MissingWorkspacesRecursive()
-			}
-			if len(missingWorkspaces) == 0 {
-				lipgloss.Println(renderer.RenderSuccess("All workspaces are already cloned"))
 			} else {
-				didClone = true
+				missingWorkspaces = ws.MissingWorkspaces()
+			}
+			missingWorkspaces = withoutFailed(missingWorkspaces, failed)
+			if len(missingWorkspaces) == 0 {
+				if pass == 0 {
+					lipgloss.Println(renderer.RenderSuccess("All workspaces are already cloned"))
+				}
+			} else {
 				result := cloneWorkspaces(cfg.WorkspaceRoot, missingWorkspaces, cfg.Parallel, cfg.StopOnError, cfg.IsInteractive)
 				if !cfg.IsInteractive {
 					renderSummary(renderer, result, "Cloned workspaces")
 				}
+				didClone = didClone || result.SuccessCount() > 0
+				recordFailed(failed, result)
 
 				if prune {
 					removed, owners := pruneNotFound(renderer, result, ws.RemoveWorkspaces)
@@ -121,14 +128,18 @@ func runUpdate(getConfig func() *config.RunContext) error {
 		}
 
 		if !skipProjects {
-			missingProjects := ws.MissingProjects()
+			var missingProjects []*gws2.Project
 			if recursive {
 				missingProjects = ws.MissingProjectsRecursive()
-			}
-			if len(missingProjects) == 0 {
-				lipgloss.Println(renderer.RenderSuccess("All projects are already cloned"))
 			} else {
-				didClone = true
+				missingProjects = ws.MissingProjects()
+			}
+			missingProjects = withoutFailed(missingProjects, failed)
+			if len(missingProjects) == 0 {
+				if pass == 0 {
+					lipgloss.Println(renderer.RenderSuccess("All projects are already cloned"))
+				}
+			} else {
 				lipgloss.Println(renderer.RenderInfo(fmt.Sprintf("Cloning %d missing projects...", len(missingProjects))))
 
 				projectHooks, err := hooks.PrepareProjectHooks(ws, hooks.ProjectHooksOptions{Command: "update", Pre: hooks.HookPreClone, Post: hooks.HookPostClone, PerRepoWorkspace: true, Approvals: hookApprovals})
@@ -144,6 +155,8 @@ func runUpdate(getConfig func() *config.RunContext) error {
 				for _, label := range result.SuccessLabels() {
 					clonedProjects = append(clonedProjects, label)
 				}
+				didClone = didClone || result.SuccessCount() > 0
+				recordFailed(failed, result)
 
 				if prune {
 					removed, owners := pruneNotFound(renderer, result, ws.RemoveProjects)
@@ -197,6 +210,22 @@ func runUpdate(getConfig func() *config.RunContext) error {
 	}
 
 	return nil
+}
+
+func withoutFailed[T interface{ GetPath() string }](items []T, failed map[string]bool) []T {
+	kept := items[:0:0]
+	for _, item := range items {
+		if !failed[item.GetPath()] {
+			kept = append(kept, item)
+		}
+	}
+	return kept
+}
+
+func recordFailed(failed map[string]bool, result *engine.ExecutionResult) {
+	for _, r := range result.Failed() {
+		failed[r.JobId] = true
+	}
 }
 
 // pruneNotFound removes, via remove, every failed job in result whose error
