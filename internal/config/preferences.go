@@ -26,8 +26,16 @@ const (
 )
 
 type ConfigValue[T any] struct {
-	Value  T
-	Source ConfigSource
+	value  T
+	source ConfigSource
+}
+
+func (c *ConfigValue[T]) Value() T {
+	return c.value
+}
+
+func (c *ConfigValue[T]) Source() ConfigSource {
+	return c.source
 }
 
 const (
@@ -37,10 +45,11 @@ const (
 	KeyFormat            = "format"
 	KeyTheme             = "theme"
 	KeyNoColor           = "no-color"
-	KeyStopOnError       = "stop-on-error"
+	KeyStopOnError       = "errexit"
 	KeyProviderCacheTTL  = "provider-cache-ttl"
 	KeyTrustedWorkspaces = "trusted-workspaces"
 	KeyUpdateCheck       = "update-check"
+	KeyGlobalFallback    = "global-fallback"
 
 	DefaultFormat           = "text"
 	DefaultProviderCacheTTL = "24h"
@@ -57,6 +66,7 @@ type Preferences struct {
 	ProviderCacheTTL  ConfigValue[time.Duration]
 	TrustedWorkspaces ConfigValue[[]string]
 	UpdateCheck       ConfigValue[bool]
+	GlobalFallback    ConfigValue[bool]
 }
 
 type PreferenceKey struct {
@@ -75,6 +85,7 @@ var PreferenceKeys = []PreferenceKey{
 	{KeyStopOnError, "boolean", false, "Stop execution on first error", validateBoolText},
 	{KeyProviderCacheTTL, "duration", DefaultProviderCacheTTL, "How long a discovered provider workspace is kept before --refresh-providers re-reads it", validateDurationText},
 	{KeyUpdateCheck, "boolean", true, "Check once a day whether a newer gogws release is available", validateBoolText},
+	{KeyGlobalFallback, "boolean", true, "Use the global workspace (~/" + UserConfigDir + "/" + GlobalWorkspacesFile + ") when no workspace is found", validateBoolText},
 	{KeyTrustedWorkspaces, "list of paths", []string{}, "Deprecated, no longer grants trust. Local hooks are trusted per file (path + sha256) in ~/.gws/" + TrustedHooksFile, nil},
 }
 
@@ -166,8 +177,8 @@ func LoadPreferences(flags *pflag.FlagSet, configFile string) (*Preferences, err
 
 	r := resolver{v: v, flags: flags}
 	prefs := &Preferences{
-		Theme:             ConfigValue[string]{Value: v.GetString(KeyTheme), Source: r.sourceOf(KeyTheme)},
-		TrustedWorkspaces: ConfigValue[[]string]{Value: v.GetStringSlice(KeyTrustedWorkspaces), Source: r.sourceOf(KeyTrustedWorkspaces)},
+		Theme:             ConfigValue[string]{value: v.GetString(KeyTheme), source: r.sourceOf(KeyTheme)},
+		TrustedWorkspaces: ConfigValue[[]string]{value: v.GetStringSlice(KeyTrustedWorkspaces), source: r.sourceOf(KeyTrustedWorkspaces)},
 	}
 
 	parallel, err := cast.ToIntE(v.Get(KeyParallel))
@@ -177,37 +188,43 @@ func LoadPreferences(flags *pflag.FlagSet, configFile string) (*Preferences, err
 	if err != nil {
 		return nil, r.invalid(KeyParallel, err)
 	}
-	prefs.Parallel = ConfigValue[int]{Value: parallel, Source: r.sourceOf(KeyParallel)}
+	prefs.Parallel = ConfigValue[int]{value: parallel, source: r.sourceOf(KeyParallel)}
 
 	format := v.GetString(KeyFormat)
 	if err := checkFormat(format); err != nil {
 		return nil, r.invalid(KeyFormat, err)
 	}
-	prefs.Format = ConfigValue[string]{Value: format, Source: r.sourceOf(KeyFormat)}
+	prefs.Format = ConfigValue[string]{value: format, source: r.sourceOf(KeyFormat)}
 
 	noColor, err := cast.ToBoolE(v.Get(KeyNoColor))
 	if err != nil {
 		return nil, r.invalid(KeyNoColor, errors.New("must be true or false"))
 	}
-	prefs.NoColor = ConfigValue[bool]{Value: noColor, Source: r.sourceOf(KeyNoColor)}
+	prefs.NoColor = ConfigValue[bool]{value: noColor, source: r.sourceOf(KeyNoColor)}
 
 	stopOnError, err := cast.ToBoolE(v.Get(KeyStopOnError))
 	if err != nil {
 		return nil, r.invalid(KeyStopOnError, errors.New("must be true or false"))
 	}
-	prefs.StopOnError = ConfigValue[bool]{Value: stopOnError, Source: r.sourceOf(KeyStopOnError)}
+	prefs.StopOnError = ConfigValue[bool]{value: stopOnError, source: r.sourceOf(KeyStopOnError)}
 
 	ttl, err := time.ParseDuration(v.GetString(KeyProviderCacheTTL))
 	if err != nil {
 		return nil, r.invalid(KeyProviderCacheTTL, errors.New("must be a duration (e.g. 30m, 12h)"))
 	}
-	prefs.ProviderCacheTTL = ConfigValue[time.Duration]{Value: ttl, Source: r.sourceOf(KeyProviderCacheTTL)}
+	prefs.ProviderCacheTTL = ConfigValue[time.Duration]{value: ttl, source: r.sourceOf(KeyProviderCacheTTL)}
 
 	updateCheck, err := cast.ToBoolE(v.Get(KeyUpdateCheck))
 	if err != nil {
 		return nil, r.invalid(KeyUpdateCheck, errors.New("must be true or false"))
 	}
-	prefs.UpdateCheck = ConfigValue[bool]{Value: updateCheck, Source: r.sourceOf(KeyUpdateCheck)}
+	prefs.UpdateCheck = ConfigValue[bool]{value: updateCheck, source: r.sourceOf(KeyUpdateCheck)}
+
+	globalFallback, err := cast.ToBoolE(v.Get(KeyGlobalFallback))
+	if err != nil {
+		return nil, r.invalid(KeyGlobalFallback, errors.New("must be true or false"))
+	}
+	prefs.GlobalFallback = ConfigValue[bool]{value: globalFallback, source: r.sourceOf(KeyGlobalFallback)}
 
 	return prefs, nil
 }

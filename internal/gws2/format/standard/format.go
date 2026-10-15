@@ -1,6 +1,7 @@
 package standard
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,8 +31,14 @@ func (f Format) New(dir string) gws2.WorkspaceConfig {
 	return &config{dir: dir, location: defaultLocation(dir)}
 }
 
+func NewGlobal(dir, path string) gws2.WorkspaceConfig {
+	_, err := os.Stat(path)
+	return &config{dir: dir, global: true, location: fileLocation{Path: path, Exists: err == nil, Encoding: yamlEncoding{"yaml"}}}
+}
+
 type config struct {
 	dir      string
+	global   bool
 	location fileLocation
 }
 
@@ -48,7 +55,7 @@ func (c *config) Read() (*gws2.Workspace, error) {
 	if err != nil {
 		return nil, err
 	}
-	return toWorkspace(c.dir, doc)
+	return toWorkspace(c.dir, c.global, doc)
 }
 
 func (c *config) WriteWorkspaces(w *gws2.Workspace) error {
@@ -120,23 +127,23 @@ func (c *config) clearSection(clear func(doc *document)) (string, error) {
 }
 
 func readDocument(location fileLocation) (*document, error) {
-	doc := &document{Version: CurrentVersion}
 	if !location.Exists {
-		return doc, nil
+		return &document{Version: CurrentVersion}, nil
 	}
+	doc := &document{}
 	data, err := os.ReadFile(location.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", location.Path, err)
 	}
+
 	if err := location.Encoding.decode(data, doc); err != nil {
 		return nil, fmt.Errorf("failed to parse %s: %w", location.Path, err)
 	}
-	if doc.Version == 0 {
-		doc.Version = CurrentVersion
-	}
+
 	if doc.Version != CurrentVersion {
 		return nil, fmt.Errorf("unsupported %s version %d (supported: %d)", location.Path, doc.Version, CurrentVersion)
 	}
+
 	return doc, nil
 }
 
@@ -154,7 +161,7 @@ func writeDocument(location fileLocation, doc *document) error {
 	return nil
 }
 
-func toWorkspace(dir string, doc *document) (*gws2.Workspace, error) {
+func toWorkspace(dir string, global bool, doc *document) (*gws2.Workspace, error) {
 	node := gws2.NewRootWorkspace(dir)
 
 	if doc.Self != nil {
@@ -166,15 +173,18 @@ func toWorkspace(dir string, doc *document) (*gws2.Workspace, error) {
 	}
 
 	for i, e := range doc.Workspaces {
-		if e.Path == "" {
-			return nil, fmt.Errorf("workspaces[%d]: empty path", i)
+		if err := e.checkWorkspace(); err != nil {
+			return nil, fmt.Errorf("workspaces[%d]: %w", i, err)
 		}
-		remotes, err := toRemotes(e.Remotes)
+		if err := checkAnchored(global, e.location()); err != nil {
+			return nil, fmt.Errorf("workspaces[%d] %s: %w", i, e.location(), err)
+		}
+		remotes, err := e.toRemotes()
 		if err != nil {
-			return nil, fmt.Errorf("workspaces[%d] %s: %w", i, e.Path, err)
+			return nil, fmt.Errorf("workspaces[%d] %s: %w", i, e.location(), err)
 		}
-		ws := newWorkspace(dir, e.Path, remotes)
-		if e.Path == "." || gws2.PathKey(ws.AbsolutePath) == gws2.PathKey(dir) {
+		ws := newWorkspace(dir, e.location(), remotes)
+		if e.location() == "." || gws2.PathKey(ws.AbsolutePath) == gws2.PathKey(dir) {
 			node.SelfEntry = ws
 			continue
 		}
@@ -182,20 +192,27 @@ func toWorkspace(dir string, doc *document) (*gws2.Workspace, error) {
 	}
 
 	for i, e := range doc.Projects {
-		if e.Path == "" {
-			return nil, fmt.Errorf("projects[%d]: empty path", i)
+		if err := e.checkProject(); err != nil {
+			return nil, fmt.Errorf("projects[%d]: %w", i, err)
 		}
-		remotes, err := toRemotes(e.Remotes)
-		if err != nil {
+		if err := checkAnchored(global, e.Path); err != nil {
 			return nil, fmt.Errorf("projects[%d] %s: %w", i, e.Path, err)
 		}
-		if len(remotes) == 0 {
-			return nil, fmt.Errorf("projects[%d] %s: no remotes defined", i, e.Path)
+		remotes, err := e.toRemotes()
+		if err != nil {
+			return nil, fmt.Errorf("projects[%d] %s: %w", i, e.Path, err)
 		}
 		node.AddProject(gws2.NewProject(dir, e.Path, remotes))
 	}
 
 	return node, nil
+}
+
+func checkAnchored(global bool, path string) error {
+	if global && !gws2.IsAnchoredPath(path) {
+		return errors.New("relative path not allowed in the global workspace file, use an absolute path or ~/")
+	}
+	return nil
 }
 
 func newWorkspace(dir, path string, remotes []*git.Remote) *gws2.Workspace {

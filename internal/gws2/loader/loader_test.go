@@ -1,6 +1,7 @@
 package loader
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -30,23 +31,6 @@ func captureWarnings(t *testing.T) *strings.Builder {
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelWarn})))
 	t.Cleanup(func() { slog.SetDefault(previous) })
 	return &logs
-}
-
-func chdirForFindRoot(t *testing.T, dir string) {
-	t.Helper()
-	previousDir, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	previousCache := cachedRootDir
-	cachedRootDir = ""
-	t.Cleanup(func() {
-		_ = os.Chdir(previousDir)
-		cachedRootDir = previousCache
-	})
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func assertSamePath(t *testing.T, got, want string) {
@@ -162,7 +146,7 @@ func TestLoad_ConfigDirWinsOverLegacyFiles(t *testing.T) {
 
 func TestLoad_AppliesIgnoreFile(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, gws2.ConfigDirName, standard.FileBaseName+".yaml"), "projects:\n  - path: keep\n    remotes: [{url: git@example.com:org/keep.git}]\n  - path: ignored\n    remotes: [{url: git@example.com:org/ignored.git}]\n")
+	writeFile(t, filepath.Join(root, gws2.ConfigDirName, standard.FileBaseName+".yaml"), "version: 1\nprojects:\n  - path: keep\n    remotes: [{url: git@example.com:org/keep.git}]\n  - path: ignored\n    remotes: [{url: git@example.com:org/ignored.git}]\n")
 	writeFile(t, filepath.Join(root, gws.IgnoreFileName), "ignored\n")
 
 	ws, err := NewFromPath(root).Load()
@@ -176,7 +160,7 @@ func TestLoad_AppliesIgnoreFile(t *testing.T) {
 
 func TestLoad_YamlRootWithLegacyChild(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, gws2.ConfigDirName, standard.FileBaseName+".yaml"), "self:\n  remotes: [{url: git@example.com:org/root.git}]\nworkspaces:\n  - path: legacy\nprojects:\n  - path: api\n    remotes: [{url: git@example.com:org/api.git}]\n")
+	writeFile(t, filepath.Join(root, gws2.ConfigDirName, standard.FileBaseName+".yaml"), "version: 1\nself:\n  remotes: [{url: git@example.com:org/root.git}]\nworkspaces:\n  - path: legacy\nprojects:\n  - path: api\n    remotes: [{url: git@example.com:org/api.git}]\n")
 	writeFile(t, filepath.Join(root, "legacy", gws.ProjectsFileName), "cli | git@example.com:org/cli.git\n")
 
 	ws, err := NewFromPath(root).Load()
@@ -197,7 +181,7 @@ func TestLoad_YamlRootWithLegacyChild(t *testing.T) {
 
 func TestLoad_YamlWinsOverGwsInSameDir(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, standard.FileBaseName+".yaml"), "projects:\n  - path: fromyaml\n    remotes: [{url: git@example.com:org/y.git}]\n")
+	writeFile(t, filepath.Join(root, standard.FileBaseName+".yaml"), "version: 1\nprojects:\n  - path: fromyaml\n    remotes: [{url: git@example.com:org/y.git}]\n")
 	writeFile(t, filepath.Join(root, gws.ProjectsFileName), "fromgws | git@example.com:org/g.git\n")
 
 	logs := captureWarnings(t)
@@ -266,7 +250,7 @@ func TestSave_NewWorkspaceIsBornInYaml(t *testing.T) {
 
 func TestSave_MissingChildGetsAConfig(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, gws2.ConfigDirName, standard.FileBaseName+".yaml"), "workspaces:\n  - path: missing\n")
+	writeFile(t, filepath.Join(root, gws2.ConfigDirName, standard.FileBaseName+".yaml"), "version: 1\nworkspaces:\n  - path: missing\n")
 
 	ws, err := NewFromPath(root).Load()
 	if err != nil {
@@ -285,9 +269,8 @@ func TestFindRoot_LegacyProjectsFile(t *testing.T) {
 	if err := os.MkdirAll(sub, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	chdirForFindRoot(t, sub)
 
-	got, err := FindRoot()
+	got, err := FindRoot(sub, ModeNearest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,9 +284,8 @@ func TestFindRoot_WorkspacesFileInConfigDir(t *testing.T) {
 	if err := os.MkdirAll(sub, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	chdirForFindRoot(t, sub)
 
-	got, err := FindRoot()
+	got, err := FindRoot(sub, ModeNearest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,18 +294,148 @@ func TestFindRoot_WorkspacesFileInConfigDir(t *testing.T) {
 
 func TestFindRoot_YamlAtRoot(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, standard.FileBaseName+".yaml"), "workspaces:\n  - path: sub\n")
+	writeFile(t, filepath.Join(root, standard.FileBaseName+".yaml"), "version: 1\nworkspaces:\n  - path: sub\n")
 	sub := filepath.Join(root, "sub", "deep")
 	if err := os.MkdirAll(sub, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	chdirForFindRoot(t, sub)
 
-	got, err := FindRoot()
+	got, err := FindRoot(sub, ModeNearest)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertSamePath(t, got, root)
+}
+
+func TestFindRoot_NearestStopsAtProjectsOnlyOrWorkspacesOnly(t *testing.T) {
+	for _, file := range []string{gws.ProjectsFileName, gws.WorkspacesFileName} {
+		t.Run(file, func(t *testing.T) {
+			root := t.TempDir()
+			writeFile(t, filepath.Join(root, gws.WorkspacesFileName), "inner | folder\n")
+			inner := filepath.Join(root, "inner")
+			content := "api | git@example.com:org/api.git\n"
+			if file == gws.WorkspacesFileName {
+				content = "sub | folder\n"
+			}
+			writeFile(t, filepath.Join(inner, file), content)
+			start := filepath.Join(inner, "deep")
+			if err := os.MkdirAll(start, 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			got, err := FindRoot(start, ModeNearest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertSamePath(t, got, inner)
+		})
+	}
+}
+
+func TestFindRoot_Topmost(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, gws2.ConfigDirName, standard.FileBaseName+".yaml"), "version: 1\nworkspaces:\n  - path: middle\n")
+	middle := filepath.Join(root, "middle")
+	writeFile(t, filepath.Join(middle, gws.WorkspacesFileName), "inner | folder\n")
+	inner := filepath.Join(middle, "inner")
+	writeFile(t, filepath.Join(inner, gws.ProjectsFileName), "api | git@example.com:org/api.git\n")
+
+	got, err := FindRoot(inner, ModeTopmost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSamePath(t, got, root)
+
+	got, err = FindRoot(inner, ModeNearest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSamePath(t, got, inner)
+}
+
+func TestFindRoot_NoWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	for _, mode := range []WorkspaceMode{ModeNearest, ModeTopmost} {
+		if _, err := FindRoot(dir, mode); !errors.Is(err, ErrNoWorkspace) {
+			t.Fatalf("%s: err = %v, want ErrNoWorkspace", mode, err)
+		}
+	}
+}
+
+func TestNewGlobal_RejectsRelativePaths(t *testing.T) {
+	home := t.TempDir()
+	file := filepath.Join(home, gws2.ConfigDirName, "global.workspaces.yaml")
+	for name, content := range map[string]string{
+		"project":   "version: 1\nprojects:\n  - path: dev/api\n    url: git@example.com:org/api.git\n",
+		"workspace": "version: 1\nworkspaces:\n  - path: dev\n",
+		"folder":    "version: 1\nworkspaces:\n  - folder: ./dev\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			writeFile(t, file, content)
+			if _, err := standard.NewGlobal(filepath.Dir(file), file).Read(); err == nil {
+				t.Fatal("expected an error for a relative path in the global file")
+			}
+		})
+	}
+}
+
+func TestNewGlobal_LoadsHomeAndAbsolutePaths(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	elsewhere := t.TempDir()
+	file := filepath.Join(home, gws2.ConfigDirName, "global.workspaces.yaml")
+	writeFile(t, file, "version: 1\nprojects:\n  - path: ~/dev/api\n    url: git@example.com:org/api.git\n  - path: "+filepath.ToSlash(filepath.Join(elsewhere, "web"))+"\n    remotes: [{url: git@example.com:org/web.git}]\nworkspaces:\n  - folder: "+filepath.ToSlash(elsewhere)+"\n")
+
+	ws, err := NewGlobal(filepath.Dir(file), file).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ws.Projects) != 2 {
+		t.Fatalf("projects = %d, want 2", len(ws.Projects))
+	}
+	assertSamePathNoEval(t, ws.Projects[0].GetPath(), filepath.Join(home, "dev", "api"))
+	assertSamePathNoEval(t, ws.Projects[1].GetPath(), filepath.Join(elsewhere, "web"))
+	if ws.Config().Path() != file {
+		t.Fatalf("config path = %s, want %s", ws.Config().Path(), file)
+	}
+	if len(ws.Children) != 1 {
+		t.Fatalf("children = %d, want 1", len(ws.Children))
+	}
+	assertSamePathNoEval(t, ws.Children[0].AbsolutePath, elsewhere)
+	if len(ws.Projects[0].Remotes) != 1 || ws.Projects[0].Remotes[0].Name != "origin" {
+		t.Fatalf("url shorthand must yield a single origin remote, got %+v", ws.Projects[0].Remotes)
+	}
+}
+
+func TestNewGlobal_MissingFileIsCreatedOnSave(t *testing.T) {
+	home := t.TempDir()
+	file := filepath.Join(home, gws2.ConfigDirName, "global.workspaces.yaml")
+
+	ws, err := NewGlobal(home, file).RunDoctor(false).Recursive(false).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ws.Projects) != 0 || len(ws.Children) != 0 {
+		t.Fatalf("got %d projects, %d children", len(ws.Projects), len(ws.Children))
+	}
+	ws.AddProject(gws2.NewProject(home, filepath.Join(home, "api"), []*git.Remote{{Name: "origin", URL: "git@example.com:org/api.git"}}))
+	if err := ws.SaveProjects(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(file); err != nil {
+		t.Fatalf("expected %s to be created: %v", file, err)
+	}
+	if _, err := os.Stat(filepath.Join(home, gws2.ConfigDirName, standard.FileBaseName+".yaml")); !os.IsNotExist(err) {
+		t.Fatal("global save must not create a local workspaces file")
+	}
+}
+
+func assertSamePathNoEval(t *testing.T, got, want string) {
+	t.Helper()
+	if gws2.PathKey(got) != gws2.PathKey(want) {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
 }
 
 func TestLoad_JsonRootWithLegacyChild(t *testing.T) {
@@ -350,9 +462,8 @@ func TestFindRoot_TomlAtRoot(t *testing.T) {
 	if err := os.MkdirAll(sub, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	chdirForFindRoot(t, sub)
 
-	got, err := FindRoot()
+	got, err := FindRoot(sub, ModeNearest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,12 +500,11 @@ func withCountingFormats(t *testing.T) *countingFormat {
 
 func TestDetect_OncePerDirectory(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, gws2.ConfigDirName, standard.FileBaseName+".yaml"), "workspaces:\n  - path: sub\nprojects:\n  - path: api\n    remotes: [{url: git@example.com:org/api.git}]\n")
+	writeFile(t, filepath.Join(root, gws2.ConfigDirName, standard.FileBaseName+".yaml"), "version: 1\nworkspaces:\n  - path: sub\nprojects:\n  - path: api\n    remotes: [{url: git@example.com:org/api.git}]\n")
 	writeFile(t, filepath.Join(root, "sub", standard.FileBaseName+".json"), `{"projects": [{"path": "cli", "remotes": [{"url": "git@example.com:org/cli.git"}]}]}`)
 	counter := withCountingFormats(t)
-	chdirForFindRoot(t, root)
 
-	found, err := FindRoot()
+	found, err := FindRoot(root, ModeNearest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,14 +529,13 @@ func TestDetect_OncePerDirectory(t *testing.T) {
 
 func TestDetect_ConflictWarnedOnce(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, standard.FileBaseName+".yaml"), "projects:\n  - path: api\n    remotes: [{url: x}]\n")
+	writeFile(t, filepath.Join(root, standard.FileBaseName+".yaml"), "version: 1\nprojects:\n  - path: api\n    remotes: [{url: x}]\n")
 	writeFile(t, filepath.Join(root, gws.ProjectsFileName), "legacy | y\n")
 	withCountingFormats(t)
-	chdirForFindRoot(t, root)
 
 	logs := captureWarnings(t)
 
-	if _, err := FindRoot(); err != nil {
+	if _, err := FindRoot(root, ModeNearest); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := NewFromPath(root).Load(); err != nil {

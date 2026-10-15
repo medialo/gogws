@@ -109,6 +109,36 @@ func TestLoadPreferencesAllKeys(t *testing.T) {
 	}
 }
 
+func TestLoadPreferencesGlobalFallback(t *testing.T) {
+	tests := []struct {
+		name       string
+		file       string
+		env        map[string]string
+		wantValue  bool
+		wantSource ConfigSource
+	}{
+		{name: "default", wantValue: false, wantSource: SourceDefault},
+		{name: "file", file: "global-fallback: true\n", wantValue: true, wantSource: SourceFile},
+		{name: "env over file", file: "global-fallback: true\n", env: map[string]string{"GOGWS_GLOBAL_FALLBACK": "false"}, wantValue: false, wantSource: SourceEnv},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearPreferenceEnv(t)
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+			prefs, err := LoadPreferences(newFlags(t), writeConfig(t, tt.file))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if prefs.GlobalFallback.Value != tt.wantValue || prefs.GlobalFallback.Source != tt.wantSource {
+				t.Errorf("global-fallback = %v, want %v (%s)", prefs.GlobalFallback, tt.wantValue, tt.wantSource)
+			}
+		})
+	}
+}
+
 func TestLoadPreferencesWithoutFlags(t *testing.T) {
 	clearPreferenceEnv(t)
 	prefs, err := LoadPreferences(nil, writeConfig(t, "parallel: 9\n"))
@@ -134,6 +164,7 @@ func TestLoadPreferencesErrors(t *testing.T) {
 		{name: "invalid format", file: "format: xml\n", want: "invalid format"},
 		{name: "invalid bool", file: "no-color: maybe\n", want: "invalid no-color"},
 		{name: "invalid ttl", file: "provider-cache-ttl: soon\n", want: "invalid provider-cache-ttl"},
+		{name: "invalid global-fallback", file: "global-fallback: maybe\n", want: "invalid global-fallback"},
 	}
 
 	for _, tt := range tests {

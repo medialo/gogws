@@ -41,7 +41,7 @@ func isVersionRequest(cmd *cobra.Command) bool {
 }
 
 func startUpdateCheck(cmd *cobra.Command, prefs *config.Preferences) {
-	if !prefs.UpdateCheck.Value {
+	if !prefs.UpdateCheck.Value() {
 		return
 	}
 

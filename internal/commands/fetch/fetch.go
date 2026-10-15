@@ -3,7 +3,6 @@ package fetch
 import (
 	"context"
 	"fmt"
-	"github.com/medialo/gogws/internal/gws2/loader"
 	"log/slog"
 
 	"github.com/medialo/gogws/internal/config"
@@ -40,7 +39,7 @@ func runFetch(getConfig func() *config.RunContext) error {
 	slog.Debug("Running fetch command", "workspace", cfg.WorkspaceRoot)
 
 	//ws, err := gws.New(cfg.WorkspaceRoot).Recursive(false).Load()
-	ws, err := loader.NewFromPath(cfg.WorkspaceRoot).Recursive(false).Load()
+	ws, err := cfg.NewLoader().Recursive(false).Load()
 	if err != nil {
 		return fmt.Errorf("failed to load projects: %w", err)
 	}

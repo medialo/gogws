@@ -1,9 +1,9 @@
 package loader
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 
 	"github.com/medialo/gogws/internal/gws2"
@@ -12,21 +12,14 @@ import (
 )
 
 type Loader struct {
-	root      string
-	recursive bool
-	maxDepth  int
-	runDoctor bool
+	root       string
+	rootConfig gws2.WorkspaceConfig
+	recursive  bool
+	maxDepth   int
+	runDoctor  bool
 }
 
-func NewFromAutoRoot() (*Loader, error) {
-	path, err := FindRoot()
-
-	if err != nil {
-		return nil, err
-	}
-
-	return NewFromPath(path), nil
-}
+var ErrNoWorkspace = errors.New("no workspace found")
 
 func NewFromPath(path string) *Loader {
 	return &Loader{
@@ -35,6 +28,12 @@ func NewFromPath(path string) *Loader {
 		maxDepth:  gws2.DefaultMaxDepth,
 		runDoctor: true,
 	}
+}
+
+func NewGlobal(homeDir, file string) *Loader {
+	l := NewFromPath(homeDir)
+	l.rootConfig = standard.NewGlobal(homeDir, file)
+	return l
 }
 
 func (l *Loader) RunDoctor(enabled bool) *Loader {
@@ -88,7 +87,7 @@ func (l *Loader) loadRecursive(current *gws2.Workspace, rootPath string, depth i
 		return current, nil
 	}
 
-	config := ConfigFor(rootPath)
+	config := l.configFor(rootPath, depth)
 	current.BindConfig(config)
 	slog.Debug("Loading workspace", "depth", depth, "path", rootPath, "format", config.Format().Name())
 
@@ -135,30 +134,38 @@ func (l *Loader) loadRecursive(current *gws2.Workspace, rootPath string, depth i
 	return current, nil
 }
 
-var (
-	cachedRootDir string
-)
-
-func FindRoot() (string, error) {
-	if cachedRootDir != "" {
-		return cachedRootDir, nil
+func (l *Loader) configFor(rootPath string, depth int) gws2.WorkspaceConfig {
+	if depth == 0 && l.rootConfig != nil {
+		return l.rootConfig
 	}
-	dir, err := os.Getwd()
+	return ConfigFor(rootPath)
+}
+
+func FindRoot(start string, mode WorkspaceMode) (string, error) {
+	dir, err := filepath.Abs(start)
 	if err != nil {
 		return "", err
 	}
 
+	found := ""
 	for {
 		if IsWorkspace(dir) {
-			cachedRootDir = dir
-			return dir, nil
+			found = dir
+			if mode != ModeTopmost {
+				return found, nil
+			}
 		}
 
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", fmt.Errorf("no workspace found (no %s, %s or %s file found in current or parent directories)",
-				filepath.Join(gws2.ConfigDirName, standard.FileBaseName+".{yaml,yml,json,toml}"), filepath.Join(gws2.ConfigDirName, gws.ProjectsFileNameInDir), gws.ProjectsFileName)
+			break
 		}
 		dir = parent
 	}
+
+	if found != "" {
+		return found, nil
+	}
+	return "", fmt.Errorf("%w (no %s, %s or %s file found in current or parent directories)", ErrNoWorkspace,
+		filepath.Join(gws2.ConfigDirName, standard.FileBaseName+".{yaml,yml,json,toml}"), filepath.Join(gws2.ConfigDirName, gws.ProjectsFileNameInDir), gws.ProjectsFileName)
 }

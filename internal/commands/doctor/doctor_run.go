@@ -6,7 +6,6 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/gws2"
-	"github.com/medialo/gogws/internal/gws2/loader"
 	"github.com/medialo/gogws/internal/ui/cli"
 
 	"github.com/spf13/cobra"
@@ -36,7 +35,7 @@ func runDoctorRun(getConfig func() *config.RunContext, ids []string) error {
 		return fmt.Errorf("no workspace found (no .projects.gws file)")
 	}
 
-	ws, err := loader.NewFromPath(cfg.WorkspaceRoot).RunDoctor(false).Load()
+	ws, err := cfg.NewLoader().RunDoctor(false).Load()
 	if err != nil {
 		return err
 	}

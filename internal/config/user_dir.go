@@ -14,6 +14,8 @@ import (
 const (
 	UserConfigDir  = ".gws"
 	UserConfigFile = "config.yaml"
+
+	GlobalWorkspacesFile = "global.workspaces.yaml"
 )
 
 func GetUserConfigDir() (string, error) {
@@ -30,6 +32,14 @@ func GetUserConfigPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(configDir, UserConfigFile), nil
+}
+
+func GetGlobalWorkspacesPath() (string, error) {
+	configDir, err := GetUserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(configDir, GlobalWorkspacesFile), nil
 }
 
 func GetUserHooksDir() (string, error) {
@@ -68,6 +78,7 @@ type ConfigFile struct {
 	ProviderCacheTTL  string   `yaml:"provider-cache-ttl,omitempty"`
 	TrustedWorkspaces []string `yaml:"trusted-workspaces,omitempty"`
 	UpdateCheck       *bool    `yaml:"update-check,omitempty"`
+	GlobalFallback    *bool    `yaml:"global-fallback,omitempty"`
 }
 
 func SetPreference(key, raw string) error {
@@ -105,6 +116,9 @@ func SetPreference(key, raw string) error {
 	case KeyUpdateCheck:
 		b, _ := strconv.ParseBool(raw)
 		file.UpdateCheck = &b
+	case KeyGlobalFallback:
+		b, _ := strconv.ParseBool(raw)
+		file.GlobalFallback = &b
 	}
 
 	return saveConfigFile(file)

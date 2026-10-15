@@ -9,6 +9,7 @@ import (
 	"github.com/medialo/gogws/internal/gws2/format/standard"
 )
 
+// order : try standard then gws format
 var formats = []gws2.WorkspaceFormat{standard.Format{}, gws.Format{}}
 
 type detection struct {

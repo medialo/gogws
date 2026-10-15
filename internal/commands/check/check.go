@@ -49,7 +49,7 @@ func runCheck(getConfig func() *config.RunContext) error {
 
 	slog.Debug("Running check command", "workspace", cfg.WorkspaceRoot)
 
-	ws, err := loader.NewFromPath(cfg.WorkspaceRoot).Recursive(false).Load()
+	ws, err := cfg.NewLoader().Recursive(false).Load()
 	if err != nil {
 		return fmt.Errorf("failed to load projects: %w", err)
 	}

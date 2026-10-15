@@ -153,7 +153,7 @@ func NewRootWorkspace(path string) *Workspace {
 // .projects.gws. It is not attached to any workspace or index yet; call
 // Workspace.AddProject to attach it, then Workspace.SaveProjects to persist.
 func NewProject(rootPath, relativePath string, remotes []*git.Remote) *Project {
-	absPath := filepath.Join(rootPath, relativePath)
+	absPath := ResolvePath(rootPath, relativePath)
 	_, err := os.Stat(absPath)
 	return &Project{
 		GitRepository: GitRepository{
@@ -174,7 +174,7 @@ func NewProject(rootPath, relativePath string, remotes []*git.Remote) *Project {
 // yet; call Workspace.AddWorkspace to attach it, then
 // Workspace.SaveWorkspace to persist.
 func NewChildWorkspace(rootPath, relativePath string, remotes []*git.Remote) *Workspace {
-	absPath := filepath.Join(rootPath, relativePath)
+	absPath := ResolvePath(rootPath, relativePath)
 	_, err := os.Stat(absPath)
 	return &Workspace{
 		Entry: Entry{
@@ -193,7 +193,7 @@ func NewChildWorkspace(rootPath, relativePath string, remotes []*git.Remote) *Wo
 // written back with the literal "folder" marker) rooted at rootPath, for
 // relativePath exactly as it should appear in .workspaces.gws.
 func NewFolderWorkspace(rootPath, relativePath string) *Workspace {
-	absPath := filepath.Join(rootPath, relativePath)
+	absPath := ResolvePath(rootPath, relativePath)
 	_, err := os.Stat(absPath)
 	return &Workspace{
 		Entry: Entry{

@@ -79,24 +79,30 @@ func unknownKeyError(key string) error {
 func displayValue(prefs *config.Preferences, key string) (any, config.ConfigSource, bool) {
 	switch key {
 	case config.KeyParallel:
-		return prefs.Parallel.Value, prefs.Parallel.Source, true
+		return entry(&prefs.Parallel)
 	case config.KeyFormat:
-		return prefs.Format.Value, prefs.Format.Source, true
+		return entry(&prefs.Format)
 	case config.KeyTheme:
-		return formatValue(prefs.Theme.Value), prefs.Theme.Source, true
+		return entry(&prefs.Theme)
 	case config.KeyNoColor:
-		return prefs.NoColor.Value, prefs.NoColor.Source, true
+		return entry(&prefs.NoColor)
 	case config.KeyStopOnError:
-		return prefs.StopOnError.Value, prefs.StopOnError.Source, true
+		return entry(&prefs.StopOnError)
 	case config.KeyProviderCacheTTL:
-		return prefs.ProviderCacheTTL.Value, prefs.ProviderCacheTTL.Source, true
+		return entry(&prefs.ProviderCacheTTL)
 	case config.KeyUpdateCheck:
-		return prefs.UpdateCheck.Value, prefs.UpdateCheck.Source, true
+		return entry(&prefs.UpdateCheck)
 	case config.KeyTrustedWorkspaces:
-		return formatValue(prefs.TrustedWorkspaces.Value), prefs.TrustedWorkspaces.Source, true
+		return entry(&prefs.TrustedWorkspaces)
+	case config.KeyGlobalFallback:
+		return entry(&prefs.GlobalFallback)
 	default:
 		return nil, "", false
 	}
+}
+
+func entry[T any](c *config.ConfigValue[T]) (any, config.ConfigSource, bool) {
+	return formatValue(c.Value()), c.Source(), true
 }
 
 func formatValue(value any) any {

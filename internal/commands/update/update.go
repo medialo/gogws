@@ -13,7 +13,6 @@ import (
 	"github.com/medialo/gogws/internal/engine"
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gws2"
-	"github.com/medialo/gogws/internal/gws2/loader"
 	"github.com/medialo/gogws/internal/hooks"
 	"github.com/medialo/gogws/internal/providers"
 	"github.com/medialo/gogws/internal/ui/cli"
@@ -88,7 +87,7 @@ func runUpdate(getConfig func() *config.RunContext) error {
 
 	for pass := 0; ; pass++ {
 		slog.Debug(fmt.Sprintf("Running update command in workspace: %s", cfg.WorkspaceRoot), "pass", pass)
-		ws, err := loader.NewFromPath(cfg.WorkspaceRoot).Recursive(recursive).Load()
+		ws, err := cfg.NewLoader().Recursive(recursive).Load()
 		if err != nil {
 			return fmt.Errorf("failed to resolve workspace: %w", err)
 		}
@@ -197,7 +196,7 @@ func runUpdate(getConfig func() *config.RunContext) error {
 	}
 
 	if !noProviderDiscovery && (refreshProviders || forceRefreshProviders) {
-		ws, err := loader.NewFromPath(cfg.WorkspaceRoot).Load()
+		ws, err := cfg.NewLoader().Load()
 		if err != nil {
 			return fmt.Errorf("failed to resolve workspace: %w", err)
 		}

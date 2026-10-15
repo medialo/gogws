@@ -161,19 +161,37 @@ func TestRead_Errors(t *testing.T) {
 			"toml": "version = 2\n",
 		},
 		"project without remote": {
-			"yaml": "projects:\n  - path: api\n",
-			"json": `{"projects": [{"path": "api"}]}`,
-			"toml": "[[projects]]\npath = \"api\"\n",
+			"yaml": "version: 1\nprojects:\n  - path: api\n",
+			"json": `{"version": 1, "projects": [{"path": "api"}]}`,
+			"toml": "version = 1\n[[projects]]\npath = \"api\"\n",
 		},
 		"project without path": {
-			"yaml": "projects:\n  - remotes: [{url: x}]\n",
-			"json": `{"projects": [{"remotes": [{"url": "x"}]}]}`,
-			"toml": "[[projects]]\nremotes = [{ url = \"x\" }]\n",
+			"yaml": "version: 1\nprojects:\n  - remotes: [{url: x}]\n",
+			"json": `{"version": 1, "projects": [{"remotes": [{"url": "x"}]}]}`,
+			"toml": "version = 1\n[[projects]]\nremotes = [{ url = \"x\" }]\n",
 		},
 		"remote without url": {
-			"yaml": "workspaces:\n  - path: sub\n    remotes: [{name: origin}]\n",
-			"json": `{"workspaces": [{"path": "sub", "remotes": [{"name": "origin"}]}]}`,
-			"toml": "[[workspaces]]\npath = \"sub\"\nremotes = [{ name = \"origin\" }]\n",
+			"yaml": "version: 1\nworkspaces:\n  - path: sub\n    remotes: [{name: origin}]\n",
+			"json": `{"version": 1, "workspaces": [{"path": "sub", "remotes": [{"name": "origin"}]}]}`,
+			"toml": "version = 1\n[[workspaces]]\npath = \"sub\"\nremotes = [{ name = \"origin\" }]\n",
+		},
+		"workspace without path or folder": {
+			"yaml": "version: 1\nworkspaces:\n  - url: x\n",
+		},
+		"folder with path": {
+			"yaml": "version: 1\nworkspaces:\n  - folder: ./sub\n    path: sub\n",
+		},
+		"folder with url": {
+			"yaml": "version: 1\nworkspaces:\n  - folder: ./sub\n    url: x\n",
+		},
+		"folder with remotes": {
+			"yaml": "version: 1\nworkspaces:\n  - folder: ./sub\n    remotes: [{url: x}]\n",
+		},
+		"url with remotes": {
+			"yaml": "version: 1\nprojects:\n  - path: api\n    url: x\n    remotes: [{url: y}]\n",
+		},
+		"project with folder": {
+			"yaml": "version: 1\nprojects:\n  - folder: ./api\n",
 		},
 		"unknown key": {
 			"yaml": "projets:\n  - path: api\n",
@@ -194,15 +212,37 @@ func TestRead_Errors(t *testing.T) {
 	}
 }
 
+func TestRead_Shorthands(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, FileBaseName+".yaml"), "version: 1\nworkspaces:\n  - folder: ./existing\n  - path: child\n    url: git@example.com:org/child.git\nprojects:\n  - path: api\n    url: git@example.com:org/api.git\n")
+
+	node, err := open(root).Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(node.Children) != 2 {
+		t.Fatalf("children = %d, want 2", len(node.Children))
+	}
+	if len(node.Children[0].Remotes) != 0 || node.Children[0].RelativePath != "existing" && node.Children[0].RelativePath != "./existing" {
+		t.Fatalf("folder workspace = %+v", node.Children[0])
+	}
+	if got := node.Children[1].Remotes; len(got) != 1 || got[0].Name != "origin" || got[0].URL != "git@example.com:org/child.git" {
+		t.Fatalf("child remotes = %+v", got)
+	}
+	if got := node.Projects[0].Remotes; len(got) != 1 || got[0].Name != "origin" {
+		t.Fatalf("project remotes = %+v", got)
+	}
+}
+
 func TestLocate_Priority(t *testing.T) {
 	if canRead(t.TempDir()) {
 		t.Fatal("CanRead on empty dir = true")
 	}
 
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, FileBaseName+".yaml"), "projects:\n  - path: rootyaml\n    remotes: [{url: x}]\n")
-	writeFile(t, filepath.Join(root, gws2.ConfigDirName, FileBaseName+".toml"), "[[projects]]\npath = \"dirtoml\"\nremotes = [{ url = \"x\" }]\n")
-	writeFile(t, filepath.Join(root, gws2.ConfigDirName, FileBaseName+".json"), `{"projects": [{"path": "dirjson", "remotes": [{"url": "x"}]}]}`)
+	writeFile(t, filepath.Join(root, FileBaseName+".yaml"), "version: 1\nprojects:\n  - path: rootyaml\n    remotes: [{url: x}]\n")
+	writeFile(t, filepath.Join(root, gws2.ConfigDirName, FileBaseName+".toml"), "version = 1\n[[projects]]\npath = \"dirtoml\"\nremotes = [{ url = \"x\" }]\n")
+	writeFile(t, filepath.Join(root, gws2.ConfigDirName, FileBaseName+".json"), `{"version": 1, "projects": [{"path": "dirjson", "remotes": [{"url": "x"}]}]}`)
 
 	var logs bytes.Buffer
 	previous := slog.Default()
@@ -251,7 +291,7 @@ func TestWriteWorkspaces_NewWorkspaceIsYaml(t *testing.T) {
 func TestClear_RemovesFileWhenEmpty(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, gws2.ConfigDirName, FileBaseName+".json")
-	writeFile(t, path, `{"projects": [{"path": "api", "remotes": [{"url": "x"}]}], "workspaces": [{"path": "sub"}]}`)
+	writeFile(t, path, `{"version": 1, "projects": [{"path": "api", "remotes": [{"url": "x"}]}], "workspaces": [{"path": "sub"}]}`)
 
 	if removed, err := open(root).ClearProjects(); err != nil || removed != path {
 		t.Fatalf("ClearProjects = %q, %v", removed, err)

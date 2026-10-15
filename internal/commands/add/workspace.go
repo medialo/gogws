@@ -8,7 +8,6 @@ import (
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gws2"
-	"github.com/medialo/gogws/internal/gws2/loader"
 	"github.com/medialo/gogws/internal/ui/cli"
 	"github.com/medialo/gogws/internal/ui/prompt"
 
@@ -43,7 +42,7 @@ func runAddWorkspace(getConfig func() *config.RunContext, args []string) error {
 		return fmt.Errorf("no workspace found (no .projects.gws file)")
 	}
 
-	ws, err := loader.NewFromPath(cfg.WorkspaceRoot).RunDoctor(false).Recursive(false).Load()
+	ws, err := cfg.NewLoader().RunDoctor(false).Recursive(false).Load()
 	if err != nil {
 		return fmt.Errorf("failed to resolve workspace: %w", err)
 	}
@@ -68,7 +67,11 @@ func runAddWorkspace(getConfig func() *config.RunContext, args []string) error {
 			return err
 		}
 
-		child := gws2.NewFolderWorkspace(cfg.WorkspaceRoot, folderName)
+		entry, err := entryPath(cfg, folderName)
+		if err != nil {
+			return err
+		}
+		child := gws2.NewFolderWorkspace(cfg.WorkspaceRoot, entry)
 		ws.AddWorkspace(child)
 		if err := ws.SaveWorkspace(); err != nil {
 			return fmt.Errorf("failed to add workspace: %w", err)
@@ -83,7 +86,11 @@ func runAddWorkspace(getConfig func() *config.RunContext, args []string) error {
 		return err
 	}
 
-	child := gws2.NewChildWorkspace(cfg.WorkspaceRoot, folderName, git.OriginRemotes(gitURL))
+	entry, err := entryPath(cfg, folderName)
+	if err != nil {
+		return err
+	}
+	child := gws2.NewChildWorkspace(cfg.WorkspaceRoot, entry, git.OriginRemotes(gitURL))
 
 	ws.AddWorkspace(child)
 	if err := ws.SaveWorkspace(); err != nil {

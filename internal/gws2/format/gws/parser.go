@@ -85,7 +85,7 @@ func parseProjectLine(rootPath string, line string) (*gws2.Project, error) {
 	}
 
 	relPath := strings.TrimSpace(parts[0])
-	path := filepath.Join(rootPath, relPath)
+	path := gws2.ResolvePath(rootPath, relPath)
 	if path == "" {
 		return nil, fmt.Errorf("empty project path")
 	}
@@ -118,7 +118,7 @@ func parseWorkspaceLine(rootPath string, line string) (*gws2.Workspace, error) {
 	}
 
 	relPath := strings.TrimSpace(parts[0])
-	path := filepath.Join(rootPath, relPath)
+	path := gws2.ResolvePath(rootPath, relPath)
 	if path == "" {
 		return nil, fmt.Errorf("empty workspace path")
 	}

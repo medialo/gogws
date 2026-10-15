@@ -3,12 +3,12 @@ package add
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"charm.land/lipgloss/v2"
 	"github.com/medialo/gogws/internal/config"
 	"github.com/medialo/gogws/internal/git"
 	"github.com/medialo/gogws/internal/gws2"
-	"github.com/medialo/gogws/internal/gws2/loader"
 	"github.com/medialo/gogws/internal/ui/cli"
 	"github.com/medialo/gogws/internal/ui/prompt"
 
@@ -47,7 +47,7 @@ func runAddCurrent(getConfig func() *config.RunContext) error {
 		return fmt.Errorf("no workspace found (no .projects.gws file)")
 	}
 
-	ws, err := loader.NewFromPath(cfg.WorkspaceRoot).RunDoctor(false).Recursive(false).Load()
+	ws, err := cfg.NewLoader().RunDoctor(false).Recursive(false).Load()
 	if err != nil {
 		return fmt.Errorf("failed to resolve workspace: %w", err)
 	}
@@ -57,18 +57,30 @@ func runAddCurrent(getConfig func() *config.RunContext) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	repo, err := git.DiscoverRepository(cfg.WorkspaceRoot, cwd)
+	discovery, err := discoveryRoot(cfg)
+	if err != nil {
+		return err
+	}
+	repo, err := git.DiscoverRepository(discovery, cwd)
 	if err != nil {
 		return err
 	}
 	if repo == nil {
-		return fmt.Errorf("current directory is not a git repository inside workspace %s", cfg.WorkspaceRoot)
+		return fmt.Errorf("current directory is not a git repository inside workspace %s", discovery)
 	}
 	if len(repo.Remotes) == 0 {
 		return fmt.Errorf("repository %q has no remote", repo.Path)
 	}
 
-	if err := checkNotAlreadyKnown(ws, repo.Path); err != nil {
+	entry, err := entryPath(cfg, filepath.Join(discovery, repo.Path))
+	if err != nil {
+		return err
+	}
+	if !cfg.Global {
+		entry = repo.Path
+	}
+
+	if err := checkNotAlreadyKnown(ws, entry); err != nil {
 		return err
 	}
 
@@ -91,7 +103,7 @@ func runAddCurrent(getConfig func() *config.RunContext) error {
 	renderer := cli.NewRenderer()
 
 	if asProject {
-		ws.AddProject(gws2.NewProject(cfg.WorkspaceRoot, repo.Path, repo.Remotes))
+		ws.AddProject(gws2.NewProject(cfg.WorkspaceRoot, entry, repo.Remotes))
 		if err := ws.SaveProjects(); err != nil {
 			return fmt.Errorf("failed to add project: %w", err)
 		}
@@ -99,7 +111,7 @@ func runAddCurrent(getConfig func() *config.RunContext) error {
 		return nil
 	}
 
-	ws.AddWorkspace(gws2.NewChildWorkspace(cfg.WorkspaceRoot, repo.Path, repo.Remotes))
+	ws.AddWorkspace(gws2.NewChildWorkspace(cfg.WorkspaceRoot, entry, repo.Remotes))
 	if err := ws.SaveWorkspace(); err != nil {
 		return fmt.Errorf("failed to add workspace: %w", err)
 	}
