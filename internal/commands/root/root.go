@@ -112,10 +112,10 @@ func NewCommand() *cobra.Command {
 	rootCmd.PersistentFlags().IntP(config.KeyParallel, "p", gws2.DefaultParallel, "number of parallel operations")
 	rootCmd.PersistentFlags().String(config.KeyFormat, config.DefaultFormat, "output format (text, json, yaml)")
 	rootCmd.PersistentFlags().Bool(config.KeyNoColor, false, "disable colored output")
-	rootCmd.PersistentFlags().BoolVarP(&onlyChanges, "only-changes", "c", false, "show only repositories with changes")
+	rootCmd.PersistentFlags().BoolVarP(&onlyChanges, "dirty", "d", false, "show only repositories with changes")
 	rootCmd.PersistentFlags().CountVarP(&verbosity, "verbose", "v", "enable verbose output")
-	rootCmd.PersistentFlags().StringVar(&trustHooks, "trust-hooks", "ask", "trust mode for local hooks: ask, all, skip")
-	rootCmd.PersistentFlags().Bool(config.KeyStopOnError, false, "stop execution on first error")
+	rootCmd.PersistentFlags().StringVarP(&trustHooks, "trust-hooks", "t", "ask", "trust mode for local hooks: ask, all, skip")
+	rootCmd.PersistentFlags().BoolP(config.KeyStopOnError, "e", false, "Strop run new job on error and exit")
 	rootCmd.PersistentFlags().StringVarP(&workingDir, "working-dir", "D", "", "set working directory for the command. If not set the current directory is used")
 	rootCmd.PersistentFlags().StringVarP(&workspaceMode, "scope", "s", string(loader.ModeNearest), "workspace resolution scope: nearest (first workspace found going up), topmost (highest parent workspace), global (~/.gws/"+config.GlobalWorkspacesFile+")")
 	_ = rootCmd.RegisterFlagCompletionFunc("scope", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
@@ -124,6 +124,16 @@ func NewCommand() *cobra.Command {
 			modes[i] = string(mode)
 		}
 		return modes, cobra.ShellCompDirectiveNoFileComp
+	})
+	_ = rootCmd.RegisterFlagCompletionFunc("trust-hooks", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		modes := make([]string, len(hooks.AllTrustModes))
+		for i, mode := range hooks.AllTrustModes {
+			modes[i] = string(mode)
+		}
+		return modes, cobra.ShellCompDirectiveNoFileComp
+	})
+	_ = rootCmd.RegisterFlagCompletionFunc(config.KeyFormat, func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		return []string{"text", "json", "yaml"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	rootCmd.Flags().BoolVar(&showVersion, "version", false, "print the version of gogws")
 	rootCmd.PersistentFlags().BoolVar(&noInteractive, "no-interactive", false, "disable interactive UI and prompts (also enabled by CI=true or "+interactive.EnvNoInteractive+"=true)")

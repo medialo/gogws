@@ -23,6 +23,8 @@ const (
 	TrustModeSkip TrustMode = "skip"
 )
 
+var AllTrustModes = []TrustMode{TrustModeAll, TrustModeSkip, TrustModeAsk}
+
 type TrustResult int
 
 const (
