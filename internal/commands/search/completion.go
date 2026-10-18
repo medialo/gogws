@@ -55,14 +55,14 @@ func runSearchCompletion(shellStr string, aliases []string, printFull bool) erro
 func posixCdSnippet(alias string) string {
 	return fmt.Sprintf(`%s() {
 	local p
-	p=$(gogws search --cd "$1") && cd "$p"
+	p=$(gogws search --cd "$@") && cd "$p"
 }
 `, alias)
 }
 
 func fishCdSnippet(alias string) string {
 	return fmt.Sprintf(`function %s
-	set -l p (gogws search --cd $argv[1])
+	set -l p (gogws search --cd $argv)
 	and cd $p
 end
 `, alias)
@@ -70,8 +70,7 @@ end
 
 func powershellCdSnippet(alias string) string {
 	return fmt.Sprintf(`function %s {
-	param([string]$Query)
-	$p = gogws search --cd $Query
+	$p = gogws search --cd @args
 	if ($LASTEXITCODE -eq 0) { Set-Location $p }
 }
 `, alias)

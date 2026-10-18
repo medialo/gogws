@@ -35,7 +35,7 @@ match against the full absolute path instead.
 Use --cd to print the absolute path of the single match to
 stdout instead of a table, for a shell "smart cd" alias, e.g.:
 
-  gcd() { local p; p=$(gogws search --cd "$1") && cd "$p"; }
+  gcd() { local p; p=$(gogws search --cd "$@") && cd "$p"; }
 
 Use --completion <shell> to print that alias ready-made instead of typing
 it by hand (bash, zsh, fish, powershell), to source from a shell rc file:
