@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://medialo.github.io/gogws/schemas/config.schema.json",
+  "title": "Gogws user configuration",
+  "description": "User configuration file of Gogws: ~/.gws/config.yaml.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "parallel": {
+      "description": "Number of repositories processed at the same time.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 5
+    },
+    "format": {
+      "description": "Output format of gogws status.",
+      "enum": ["text", "json", "yaml"],
+      "default": "text"
+    },
+    "theme": {
+      "description": "Path of a YAML file that changes the colors of the output.",
+      "type": "string"
+    },
+    "no-color": {
+      "description": "Disable colored output.",
+      "type": "boolean",
+      "default": false
+    },
+    "errexit": {
+      "description": "Stop starting new jobs after the first error.",
+      "type": "boolean",
+      "default": false
+    },
+    "provider-cache-ttl": {
+      "description": "How long a workspace discovered from a GitHub or GitLab organization is kept, for example 30m, 12h or 1h30m.",
+      "type": "string",
+      "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+      "default": "24h"
+    },
+    "update-check": {
+      "description": "Look once a day whether a newer release exists, and print a notice.",
+      "type": "boolean",
+      "default": true
+    },
+    "global-fallback": {
+      "description": "Use the global workspace when no workspace is found from the current folder.",
+      "type": "boolean",
+      "default": true
+    },
+    "trusted-workspaces": {
+      "description": "Deprecated. It no longer trusts anything: hooks are trusted file by file.",
+      "type": "array",
+      "items": { "type": "string" },
+      "deprecated": true
+    }
+  }
+}

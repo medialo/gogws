@@ -14,6 +14,10 @@
     <build-profile instance="gogws">
         <variables>
             <noindex-content>false</noindex-content>
+            <algolia-id>ARJBZQUJ8L</algolia-id>
+            <algolia-index>gogws</algolia-index>
+            <algolia-api-key>a453780358146101509df786678ad6d8</algolia-api-key>
+            <algolia-show-logo>true</algolia-show-logo>
         </variables>
     </build-profile>
 

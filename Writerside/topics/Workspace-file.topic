@@ -317,6 +317,34 @@ projects:
         </chapter>
     </chapter>
 
+    <chapter title="Editor completion" id="workspace-file_chapter-schema">
+        <p>
+            A JSON Schema describes the file. Your editor uses it to complete keys and to underline mistakes.
+        </p>
+        <code-block lang="shell"><![CDATA[
+https://medialo.github.io/gogws/schemas/workspace.schema.json
+]]></code-block>
+        <p>Add one line at the top of the file:</p>
+        <tabs>
+            <tab title="YAML">
+                <code-block lang="yaml"><![CDATA[
+# yaml-language-server: $schema=https://medialo.github.io/gogws/schemas/workspace.schema.json
+version: 1
+]]></code-block>
+            </tab>
+            <tab title="TOML">
+                <code-block lang="toml"><![CDATA[
+#:schema https://medialo.github.io/gogws/schemas/workspace.schema.json
+version = 1
+]]></code-block>
+            </tab>
+        </tabs>
+        <note>
+            In a JSON file, do not add a <code>$schema</code> key: %tool_name% refuses unknown keys. Map the schema
+            to the file name in your editor settings instead.
+        </note>
+    </chapter>
+
     <chapter title="See also" id="workspace-file_chapter-see-also">
         <list>
             <li><a href="Hook.topic">Hook</a></li>

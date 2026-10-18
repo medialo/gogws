@@ -1,0 +1,127 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://medialo.github.io/gogws/schemas/workspace.schema.json",
+  "title": "Gogws workspace file",
+  "description": "Standard Gogws workspace file: workspaces.yaml, workspaces.yml, workspaces.json or workspaces.toml.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version"],
+  "properties": {
+    "version": {
+      "description": "Version of the file format. Must be 1.",
+      "const": 1
+    },
+    "self": {
+      "description": "Remotes of the repository that holds this workspace file.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "remotes": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/remote" }
+        }
+      }
+    },
+    "workspaces": {
+      "description": "Nested workspaces.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/workspace" }
+    },
+    "projects": {
+      "description": "Git repositories managed by this workspace.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/project" }
+    },
+    "settings": {
+      "description": "Free-form settings kept as they are.",
+      "type": "object"
+    }
+  },
+  "definitions": {
+    "remote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {
+        "name": {
+          "description": "Name of the git remote.",
+          "type": "string"
+        },
+        "url": {
+          "description": "URL of the git remote.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "workspace": {
+      "oneOf": [
+        {
+          "title": "Existing folder",
+          "description": "A folder that is already a workspace. Cannot be combined with path, url or remotes.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["folder"],
+          "properties": {
+            "folder": {
+              "description": "Path of an existing workspace folder. In the global workspace file, an absolute path or a path starting with ~/.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "title": "Cloned workspace",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path"],
+          "properties": {
+            "path": {
+              "description": "Folder of the workspace, relative to this workspace.",
+              "type": "string",
+              "minLength": 1
+            },
+            "url": {
+              "description": "URL of the workspace repository. Cannot be combined with remotes.",
+              "type": "string",
+              "minLength": 1
+            },
+            "remotes": {
+              "description": "Several remotes. Cannot be combined with url.",
+              "type": "array",
+              "items": { "$ref": "#/definitions/remote" }
+            }
+          },
+          "not": { "required": ["url", "remotes"] }
+        }
+      ]
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "description": "Folder of the project, relative to this workspace.",
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "description": "URL of the project repository. Cannot be combined with remotes.",
+          "type": "string",
+          "minLength": 1
+        },
+        "remotes": {
+          "description": "Several remotes. Cannot be combined with url.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/remote" }
+        }
+      },
+      "oneOf": [
+        { "required": ["url"] },
+        { "required": ["remotes"] }
+      ]
+    }
+  }
+}

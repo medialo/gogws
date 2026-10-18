@@ -237,6 +237,17 @@ Invalid format "xml": must be one of text, json, yaml.
         </table>
     </chapter>
 
+    <chapter title="Editor completion" id="configuration_chapter-schema">
+        <p>
+            A JSON Schema describes <path>config.yaml</path>. Add this line at the top of the file and your editor
+            completes the keys and checks the values:
+        </p>
+        <code-block lang="yaml"><![CDATA[
+# yaml-language-server: $schema=https://medialo.github.io/gogws/schemas/config.schema.json
+parallel: 8
+]]></code-block>
+    </chapter>
+
     <chapter title="See also" id="configuration_chapter-see-also">
         <list>
             <li><a href="Workspace-file.topic">Workspace file</a></li>
