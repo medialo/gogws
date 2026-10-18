@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic
+        SYSTEM "https://resources.jetbrains.com/writerside/1.0/xhtml-entities.dtd">
+<topic xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="https://resources.jetbrains.com/writerside/1.0/topic.v2.xsd"
+       title="Workspace file" id="Workspace-file">
+
+    <web-summary>
+        Write a %tool_name% workspace file in YAML, JSON or TOML: declare your projects, sub-workspaces and remotes,
+        with every key and validation error explained.
+    </web-summary>
+
+    <p>
+        A workspace file describes what a folder contains: the projects cloned in it, the sub-workspaces it
+        nests, and optionally the git remote of the workspace itself. %tool_name% reads this file to know which
+        repositories to check, fetch, update or clone.
+    </p>
+
+    <chapter title="File name and location" id="workspace-file_chapter-location">
+        <p>
+            The file is named <code>workspaces</code> and can be written in YAML, JSON or TOML.
+        </p>
+        <table>
+            <tr>
+                <td>Extension</td>
+                <td>Format</td>
+            </tr>
+            <tr>
+                <td><code>.yaml</code>, <code>.yml</code></td>
+                <td>YAML</td>
+            </tr>
+            <tr>
+                <td><code>.json</code></td>
+                <td>JSON</td>
+            </tr>
+            <tr>
+                <td><code>.toml</code></td>
+                <td>TOML</td>
+            </tr>
+        </table>
+        <p>%tool_name% looks for the file in this order and uses the first one found:</p>
+        <list type="decimal">
+            <li><path>.gws/workspaces.yaml</path>, <path>.gws/workspaces.yml</path>,
+                <path>.gws/workspaces.json</path>, <path>.gws/workspaces.toml</path>
+            </li>
+            <li><path>workspaces.yaml</path>, <path>workspaces.yml</path>,
+                <path>workspaces.json</path>, <path>workspaces.toml</path> at the root of the workspace
+            </li>
+        </list>
+        <note>
+            Keep a single file per workspace. If several are found, only the first one is used and
+            %tool_name% prints a warning: <code>Several workspaces files found, please keep only one</code>.
+        </note>
+        <p>
+            When %tool_name% creates the file itself, it uses <path>.gws/workspaces.yaml</path>. When it rewrites
+            an existing file, the original format is kept.
+        </p>
+        <note>
+            A rewritten file is generated again from its content: comments are lost, <code>url</code> becomes
+            <code>remotes</code> and <code>folder</code> becomes <code>path</code>. Other keys, including
+            <code>settings</code>, are kept.
+        </note>
+    </chapter>
+
+    <chapter title="Structure" id="workspace-file_chapter-structure">
+        <p>The file has five top-level keys.</p>
+        <table>
+            <tr>
+                <td>Key</td>
+                <td>Required</td>
+                <td>Description</td>
+            </tr>
+            <tr>
+                <td><code>version</code></td>
+                <td>Yes</td>
+                <td>Version of the file format. Must be <code>1</code>.</td>
+            </tr>
+            <tr>
+                <td><code>self</code></td>
+                <td>No</td>
+                <td>Git remotes of the workspace folder itself.</td>
+            </tr>
+            <tr>
+                <td><code>workspaces</code></td>
+                <td>No</td>
+                <td>List of sub-workspaces.</td>
+            </tr>
+            <tr>
+                <td><code>projects</code></td>
+                <td>No</td>
+                <td>List of repositories cloned in this workspace.</td>
+            </tr>
+            <tr>
+                <td><code>settings</code></td>
+                <td>No</td>
+                <td>Free-form map. It is preserved when the file is rewritten but is not used yet.</td>
+            </tr>
+        </table>
+        <warning>
+            Unknown keys are rejected. A typo such as <code>projets</code> makes the file unreadable: it is
+            ignored entirely, see <a href="#workspace-file_chapter-errors">Validation errors</a>.
+        </warning>
+    </chapter>
+
+    <chapter title="Entries" id="workspace-file_chapter-entries">
+        <p>
+            Items of <code>workspaces</code> and <code>projects</code> share the same keys.
+        </p>
+        <table>
+            <tr>
+                <td>Key</td>
+                <td>Description</td>
+            </tr>
+            <tr>
+                <td><code>path</code></td>
+                <td>
+                    Folder of the entry, relative to the workspace folder. Absolute paths and paths starting
+                    with <code>~/</code> are also accepted.
+                </td>
+            </tr>
+            <tr>
+                <td><code>url</code></td>
+                <td>Shorthand for a single remote named <code>origin</code>.</td>
+            </tr>
+            <tr>
+                <td><code>remotes</code></td>
+                <td>
+                    List of remotes. Each remote has a required <code>url</code> and an optional
+                    <code>name</code>.
+                </td>
+            </tr>
+            <tr>
+                <td><code>folder</code></td>
+                <td>
+                    Workspaces only. Declares a plain folder with no git remote, used to group projects.
+                    A workspace with a <code>path</code> and no remote is also a plain folder.
+                </td>
+            </tr>
+        </table>
+
+        <chapter title="Rules" id="workspace-file_chapter-rules">
+            <list>
+                <li><code>url</code> and <code>remotes</code> cannot be used together.</li>
+                <li>
+                    A remote without a name is called <code>origin</code> when it is first in the list and
+                    <code>upstream</code> when it is second. Name every remote beyond the second explicitly,
+                    otherwise it is also called <code>origin</code>.
+                </li>
+                <li>
+                    A project requires <code>path</code> and either <code>url</code> or <code>remotes</code>.
+                </li>
+                <li>
+                    A workspace requires <code>path</code> or <code>folder</code>. A workspace with a remote is
+                    a git workspace; <code>folder</code> cannot be combined with <code>path</code>,
+                    <code>url</code> or <code>remotes</code>.
+                </li>
+                <li>
+                    A workspace whose <code>path</code> is <code>.</code> describes the workspace folder itself,
+                    like <code>self</code>.
+                </li>
+            </list>
+            <note>
+                The file does not check that paths exist on disk.
+            </note>
+        </chapter>
+    </chapter>
+
+    <chapter title="Examples" id="workspace-file_chapter-examples">
+        <p>The same workspace written in the three supported formats.</p>
+        <tabs>
+            <tab title="YAML">
+                <code-block lang="yaml"><![CDATA[
+version: 1
+self:
+  remotes:
+    - { name: origin, url: git@example.com:org/root.git }
+workspaces:
+  - path: sub
+  - path: libs
+    remotes:
+      - { url: git@example.com:org/libs.git }
+projects:
+  - path: api
+    remotes:
+      - { name: origin, url: git@example.com:org/api.git }
+      - { url: git@example.com:up/api.git }
+settings:
+  custom: value
+]]></code-block>
+            </tab>
+            <tab title="JSON">
+                <code-block lang="json"><![CDATA[
+{
+  "version": 1,
+  "self": {"remotes": [{"name": "origin", "url": "git@example.com:org/root.git"}]},
+  "workspaces": [
+    {"path": "sub"},
+    {"path": "libs", "remotes": [{"url": "git@example.com:org/libs.git"}]}
+  ],
+  "projects": [
+    {"path": "api", "remotes": [{"name": "origin", "url": "git@example.com:org/api.git"}, {"url": "git@example.com:up/api.git"}]}
+  ],
+  "settings": {"custom": "value"}
+}
+]]></code-block>
+            </tab>
+            <tab title="TOML">
+                <code-block lang="toml"><![CDATA[
+version = 1
+
+[self]
+remotes = [{ name = "origin", url = "git@example.com:org/root.git" }]
+
+[[workspaces]]
+path = "sub"
+
+[[workspaces]]
+path = "libs"
+remotes = [{ url = "git@example.com:org/libs.git" }]
+
+[[projects]]
+path = "api"
+remotes = [{ name = "origin", url = "git@example.com:org/api.git" }, { url = "git@example.com:up/api.git" }]
+
+[settings]
+custom = "value"
+]]></code-block>
+            </tab>
+        </tabs>
+
+        <p>
+            In this example the second remote of <code>api</code> has no name, so it is named
+            <code>upstream</code>.
+        </p>
+
+        <p>With the <code>url</code> and <code>folder</code> shorthands:</p>
+        <code-block lang="yaml"><![CDATA[
+version: 1
+workspaces:
+  - folder: ./existing
+  - path: child
+    url: git@example.com:org/child.git
+projects:
+  - path: api
+    url: git@example.com:org/api.git
+]]></code-block>
+    </chapter>
+
+    <chapter title="Validation errors" id="workspace-file_chapter-errors">
+        <p>
+            When the file is invalid, %tool_name% prints a <code>Failed to read workspace configuration</code>
+            warning with one of the following messages and ignores the whole file. Commands then stop with
+            <code>No projects or workspaces found</code>. Messages about an entry are prefixed with its
+            position, such as <code>projects[0]</code> or <code>workspaces[1] libs</code>.
+        </p>
+        <table>
+            <tr>
+                <td>Message</td>
+                <td>Fix</td>
+            </tr>
+            <tr>
+                <td><code>unsupported &lt;file&gt; version N (supported: 1)</code></td>
+                <td>Set <code>version: 1</code>. A missing version is also refused.</td>
+            </tr>
+            <tr>
+                <td><code>failed to parse &lt;file&gt;: ...</code></td>
+                <td>Fix the syntax, or remove the unknown key named in the message.</td>
+            </tr>
+            <tr>
+                <td><code>path or folder is required</code></td>
+                <td>Give the workspace a <code>path</code> or a <code>folder</code>.</td>
+            </tr>
+            <tr>
+                <td><code>folder cannot be combined with path, url or remotes</code></td>
+                <td>Keep only <code>folder</code>, or switch to <code>path</code>.</td>
+            </tr>
+            <tr>
+                <td><code>folder is not allowed on a project</code></td>
+                <td>Use <code>path</code> in <code>projects</code>.</td>
+            </tr>
+            <tr>
+                <td><code>path is required</code></td>
+                <td>Give the project a <code>path</code>.</td>
+            </tr>
+            <tr>
+                <td><code>url cannot be combined with remotes</code></td>
+                <td>Use either <code>url</code> or <code>remotes</code>.</td>
+            </tr>
+            <tr>
+                <td><code>url or remotes is required</code></td>
+                <td>Tell %tool_name% where to clone the project from.</td>
+            </tr>
+            <tr>
+                <td><code>remotes[N]: empty url</code></td>
+                <td>Fill the <code>url</code> of the remote.</td>
+            </tr>
+        </table>
+
+        <chapter title="Duplicates" id="workspace-file_chapter-duplicates">
+            <p>
+                Two <code>workspaces</code> entries, or two <code>projects</code> entries, with the same
+                <code>path</code> are not a file error but make every command stop with
+                <code>Workspace is in invalid state, please run '%tool_call% doctor' to show diagnostics</code>.
+                Run <code>%tool_call% doctor run</code> to see the failed check, and
+                <code>%tool_call% doctor run --autofix</code> to keep the first entry and remove the others.
+            </p>
+        </chapter>
+
+        <chapter title="Nested workspaces" id="workspace-file_chapter-nested">
+            <p>
+                Nested workspaces are loaded up to a depth of 10. Deeper workspaces are reported with
+                <code>maximum workspace depth (10) reached</code>, and a workspace reached twice with
+                <code>workspace already visited (possible cycle)</code>. Both are shown as an error on that
+                workspace and the rest of the tree is still loaded. A sub-workspace whose folder does not exist
+                is listed but not read.
+            </p>
+        </chapter>
+    </chapter>
+
+    <chapter title="See also" id="workspace-file_chapter-see-also">
+        <list>
+            <li><a href="Hook.topic">Hook</a></li>
+            <li><a href="Completion.topic">Completion</a></li>
+        </list>
+    </chapter>
+</topic>

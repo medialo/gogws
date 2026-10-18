@@ -1,0 +1,277 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic
+        SYSTEM "https://resources.jetbrains.com/writerside/1.0/xhtml-entities.dtd">
+<topic xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="https://resources.jetbrains.com/writerside/1.0/topic.v2.xsd"
+       title="Use cases" id="Use-cases">
+
+    <web-summary>
+        Follow Acme and its three dev teams: team workspaces, shared libraries, a personal global workspace and a
+        company workspace that onboards newcomers.
+    </web-summary>
+
+    <p>
+        Acme has three development teams. This story follows how they use %tool_name% as the company grows.
+    </p>
+
+    <chapter title="One workspace per team" id="use-cases_chapter-teams">
+        <table>
+            <tr>
+                <td>Team</td>
+                <td>Workspace repository</td>
+                <td>Projects</td>
+            </tr>
+            <tr>
+                <td>dev1</td>
+                <td><code>ws-dev1</code></td>
+                <td><code>shop-back</code>, <code>shop-front</code></td>
+            </tr>
+            <tr>
+                <td>dev2</td>
+                <td><code>ws-dev2</code></td>
+                <td><code>billing-back</code>, <code>billing-front</code></td>
+            </tr>
+            <tr>
+                <td>dev3</td>
+                <td><code>ws-dev3</code></td>
+                <td><code>lib-back</code>, <code>lib-front</code> (libraries shared by back and front)</td>
+            </tr>
+        </table>
+        <p>
+            A workspace is a git repository that only contains the list of its projects. Here is
+            <path>ws-dev1/.gws/workspaces.yaml</path>:
+        </p>
+        <code-block lang="yaml"><![CDATA[
+version: 1
+self:
+  remotes:
+    - url: git@git.acme.dev:acme/ws-dev1.git
+projects:
+  - path: shop-back
+    url: git@git.acme.dev:acme/shop-back.git
+  - path: shop-front
+    url: git@git.acme.dev:acme/shop-front.git
+]]></code-block>
+        <p>
+            The team runs <code>%tool_call% init gitignore</code> once, so the workspace repository tracks only its
+            configuration and ignores the cloned projects.
+        </p>
+        <p>A new developer joins dev1. Two commands give them the whole team:</p>
+        <code-block lang="shell"><![CDATA[
+git clone git@git.acme.dev:acme/ws-dev1.git
+cd ws-dev1
+gogws update
+]]></code-block>
+        <p>
+            <code>%tool_call% status</code> shows the state of the projects. Every morning,
+            <code>%tool_call% fetch</code> and <code>%tool_call% ff</code> update them all in parallel.
+        </p>
+    </chapter>
+
+    <chapter title="dev1 needs the shared libraries" id="use-cases_chapter-libs">
+        <p>
+            The shop projects use the libraries of dev3. dev1 adds the workspace of dev3 as a sub-workspace in
+            <path>ws-dev1/.gws/workspaces.yaml</path> and pushes:
+        </p>
+        <code-block lang="yaml"><![CDATA[
+workspaces:
+  - path: libs
+    url: git@git.acme.dev:acme/ws-dev3.git
+]]></code-block>
+        <p>Each teammate pulls, then runs one command:</p>
+        <code-block lang="shell"><![CDATA[
+git pull
+gogws update -r
+]]></code-block>
+        <p><code>-r</code> clones the new workspace, then the projects inside it.</p>
+        <code-block lang="shell"><![CDATA[
+ws-dev1/
+├── .gws/
+├── shop-back/
+├── shop-front/
+└── libs/
+    ├── .gws/
+    ├── lib-back/
+    └── lib-front/
+]]></code-block>
+        <p>
+            <code>%tool_call% status</code> now shows <code>libs</code> under <code>ws-dev1</code>, and
+            <code>%tool_call% search lib</code> finds <code>lib-back</code> and <code>lib-front</code>.
+        </p>
+    </chapter>
+
+    <chapter title="A personal shortcut" id="use-cases_chapter-global">
+        <p>
+            Some developers want the libraries at hand from any folder, for example to open them in an editor.
+            dev1 must not force this on the whole team, so they use the global workspace. It is a file in their
+            own home folder, outside any repository:
+        </p>
+        <p><path>~/.gws/global.workspaces.yaml</path></p>
+        <code-block lang="yaml"><![CDATA[
+version: 1
+workspaces:
+  - folder: ~/work/ws-dev1/libs
+]]></code-block>
+        <p>
+            Paths in this file are absolute or start with <code>~/</code>. A <code>folder</code> is an existing
+            directory that %tool_name% loads, with the projects it contains.
+        </p>
+        <p>From any folder that is not in a workspace:</p>
+        <code-block lang="shell"><![CDATA[
+$ gogws search lib
+project    lib-back   ~/work/ws-dev1/libs/lib-back
+project    lib-front  ~/work/ws-dev1/libs/lib-front
+workspace  libs       ~/work/ws-dev1/libs
+
+$ gcd lib-front
+$ pwd
+~/work/ws-dev1/libs/lib-front
+]]></code-block>
+        <p>
+            <code>gcd</code> is described in <a href="Scope.topic">Scope</a>.
+        </p>
+        <table>
+            <tr>
+                <td></td>
+                <td>Workspace file</td>
+                <td>Global workspace</td>
+            </tr>
+            <tr>
+                <td>Lives in</td>
+                <td>The workspace repository</td>
+                <td>Your home folder</td>
+            </tr>
+            <tr>
+                <td>Shared with</td>
+                <td>The whole team</td>
+                <td>Only you</td>
+            </tr>
+            <tr>
+                <td>Used for</td>
+                <td>What the team works on</td>
+                <td>What you want to reach from anywhere</td>
+            </tr>
+        </table>
+    </chapter>
+
+    <chapter title="Everybody works on the libraries" id="use-cases_chapter-company">
+        <p>
+            Soon dev2 needs the libraries too. Acme creates a company workspace: a repository
+            <code>ws-acme</code> that lists the three team workspaces.
+        </p>
+        <code-block lang="yaml"><![CDATA[
+version: 1
+self:
+  remotes:
+    - url: git@git.acme.dev:acme/ws-acme.git
+workspaces:
+  - path: ws-dev1
+    url: git@git.acme.dev:acme/ws-dev1.git
+  - path: ws-dev2
+    url: git@git.acme.dev:acme/ws-dev2.git
+  - path: ws-dev3
+    url: git@git.acme.dev:acme/ws-dev3.git
+]]></code-block>
+        <p>
+            dev1 removes its <code>libs</code> entry. The libraries now exist once, in <code>ws-dev3</code>.
+        </p>
+        <code-block lang="mermaid"><![CDATA[
+flowchart TD
+    acme["ws-acme<br/>company workspace"] --> d1["ws-dev1"]
+    acme --> d2["ws-dev2"]
+    acme --> d3["ws-dev3"]
+    d1 --> sb["shop-back"]
+    d1 --> sf["shop-front"]
+    d2 --> bb["billing-back"]
+    d2 --> bf["billing-front"]
+    d3 --> lb["lib-back"]
+    d3 --> lf["lib-front"]
+    g["global workspace<br/>personal"] -.-> acme
+]]></code-block>
+        <p>A newcomer, whatever their team, now needs two commands for the six projects of the company:</p>
+        <code-block lang="shell"><![CDATA[
+git clone git@git.acme.dev:acme/ws-acme.git
+cd ws-acme
+gogws update -r
+]]></code-block>
+        <p>
+            The developers who had the libraries in their global workspace replace the entry with
+            <code>folder: ~/work/ws-acme</code>. One line gives them every project of the company, from any folder.
+        </p>
+
+        <chapter title="Working in one team or in the whole company" id="use-cases_chapter-company-scope">
+            <p>
+                From <path>ws-acme/ws-dev1</path>, the <a href="Scope.topic">scope</a> decides how far a command
+                goes:
+            </p>
+            <table>
+                <tr>
+                    <td>Command</td>
+                    <td>Reaches</td>
+                </tr>
+                <tr>
+                    <td><code>%tool_call% search lib</code></td>
+                    <td>dev1 only: no match</td>
+                </tr>
+                <tr>
+                    <td><code>%tool_call% search lib -s topmost</code></td>
+                    <td>The company: <code>lib-back</code>, <code>lib-front</code></td>
+                </tr>
+                <tr>
+                    <td><code>%tool_call% ff</code></td>
+                    <td>The 2 projects of dev1</td>
+                </tr>
+                <tr>
+                    <td><code>%tool_call% ff -s topmost</code></td>
+                    <td>The 6 projects of the company, in parallel</td>
+                </tr>
+            </table>
+        </chapter>
+    </chapter>
+
+    <chapter title="What made it work" id="use-cases_chapter-recap">
+        <table>
+            <tr>
+                <td>Need</td>
+                <td>Feature</td>
+            </tr>
+            <tr>
+                <td>A team gets its projects in two commands</td>
+                <td>A <a href="Workspace-file.topic">workspace file</a> in a git repository, and <code>update</code></td>
+            </tr>
+            <tr>
+                <td>Reuse the work of another team</td>
+                <td>A sub-workspace, loaded with <code>update -r</code></td>
+            </tr>
+            <tr>
+                <td>Reach projects without imposing it on others</td>
+                <td>The personal global workspace</td>
+            </tr>
+            <tr>
+                <td>Onboard anybody on the whole company</td>
+                <td>A company workspace that lists the team workspaces</td>
+            </tr>
+            <tr>
+                <td>Act on one team or on everything</td>
+                <td>The <a href="Scope.topic">scope</a>: <code>nearest</code> or <code>topmost</code></td>
+            </tr>
+            <tr>
+                <td>Jump to any project</td>
+                <td><code>%tool_call% search</code> and <code>gcd</code></td>
+            </tr>
+        </table>
+        <tip>
+            Add <a href="Hook.topic">hooks</a> to the workspace repositories, for example to install dependencies
+            after each clone. The whole team gets them with the next <code>git pull</code>.
+        </tip>
+    </chapter>
+
+    <chapter title="See also" id="use-cases_chapter-see-also">
+        <list>
+            <li><a href="Workspace-file.topic">Workspace file</a></li>
+            <li><a href="Scope.topic">Scope</a></li>
+            <li><a href="Hook.topic">Hook</a></li>
+            <li><a href="Configuration.topic">Configuration</a></li>
+        </list>
+    </chapter>
+</topic>

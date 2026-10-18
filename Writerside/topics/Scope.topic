@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic
+        SYSTEM "https://resources.jetbrains.com/writerside/1.0/xhtml-entities.dtd">
+<topic xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="https://resources.jetbrains.com/writerside/1.0/topic.v2.xsd"
+       title="Scope" id="Scope">
+
+    <web-summary>
+        Choose which workspace %tool_name% works on with --scope: nearest, topmost or global. Find and jump to any
+        project with %tool_call% search and the gcd shortcut.
+    </web-summary>
+
+    <p>
+        The scope tells %tool_name% which workspace to use as the root of a command. Set it with
+        <code>-s</code> or <code>--scope</code>.
+    </p>
+
+    <chapter title="Values" id="scope_chapter-values">
+        <table>
+            <tr>
+                <td>Scope</td>
+                <td>Root workspace</td>
+            </tr>
+            <tr>
+                <td><code>nearest</code> (default)</td>
+                <td>The first workspace found going up from the current folder.</td>
+            </tr>
+            <tr>
+                <td><code>topmost</code></td>
+                <td>The highest workspace found going up from the current folder.</td>
+            </tr>
+            <tr>
+                <td><code>global</code></td>
+                <td>The global workspace of <path>~/.gws</path>, wherever you are.</td>
+            </tr>
+        </table>
+        <p>
+            A command works on the root and on every workspace nested in it. A bigger root means a bigger tree.
+        </p>
+    </chapter>
+
+    <chapter title="Example" id="scope_chapter-example">
+        <p>You are in <path>top/mid/deep</path>, and each folder is a workspace.</p>
+        <code-block lang="shell"><![CDATA[
+top/                    topmost
+├── api
+└── mid/
+    ├── infra
+    └── deep/           nearest (you are here)
+        └── infra-tools
+]]></code-block>
+        <table>
+            <tr>
+                <td>Command</td>
+                <td>Searches in</td>
+                <td>Finds</td>
+            </tr>
+            <tr>
+                <td><code>%tool_call% search infra</code></td>
+                <td><path>deep</path></td>
+                <td><code>infra-tools</code></td>
+            </tr>
+            <tr>
+                <td><code>%tool_call% search infra -s topmost</code></td>
+                <td><path>top</path> and everything below</td>
+                <td><code>infra</code>, <code>infra-tools</code></td>
+            </tr>
+            <tr>
+                <td><code>%tool_call% search infra -s global</code></td>
+                <td>The global workspace</td>
+                <td>Only what it lists</td>
+            </tr>
+        </table>
+    </chapter>
+
+    <chapter title="How the root is chosen" id="scope_chapter-resolution">
+        <code-block lang="mermaid"><![CDATA[
+flowchart TD
+    A["--scope"] --> B{value}
+    B -->|global| G["global workspace<br/>~/.gws"]
+    B -->|nearest and -D| D["the -D folder<br/>no search"]
+    B -->|nearest| N["first workspace<br/>going up"]
+    B -->|topmost| T["highest workspace<br/>going up"]
+    N --> F{found?}
+    T --> F
+    F -->|yes| R["use it"]
+    F -->|no| FB{"global-fallback<br/>and global file?"}
+    FB -->|yes| G
+    FB -->|no| E["error: no workspace found"]
+]]></code-block>
+        <list>
+            <li>
+                With <code>-D &lt;folder&gt;</code> the search starts from that folder. In <code>nearest</code> scope
+                the folder is used as it is, even if it is not a workspace.
+            </li>
+            <li>
+                The fallback is on by default. Turn it off with <code>global-fallback: false</code>, see
+                <a href="Configuration.topic">Configuration</a>.
+            </li>
+            <li>
+                <code>init</code> refuses <code>--scope global</code>.
+            </li>
+            <li>
+                Another value fails with <code>Invalid workspace mode "x": must be one of nearest, topmost, global</code>.
+            </li>
+        </list>
+    </chapter>
+
+    <chapter title="See also" id="scope_chapter-see-also">
+        <list>
+            <li><a href="Workspace-file.topic">Workspace file</a></li>
+            <li><a href="Configuration.topic">Configuration</a></li>
+            <li><a href="Completion.topic">Completion</a></li>
+        </list>
+    </chapter>
+</topic>

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic
+        SYSTEM "https://resources.jetbrains.com/writerside/1.0/xhtml-entities.dtd">
+<topic xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="https://resources.jetbrains.com/writerside/1.0/topic.v2.xsd"
+       title="Quick jump alias" id="Quick-jump-alias">
+
+    <p>
+        <code>%tool_call% search</code> allow you to jump to repositories quickly.
+    </p>
+
+    <chapter title="Installation process" id="completion_chapter-search-alias">
+
+        <p>
+            <code>%tool_call% search</code> has its own <code>--completion</code> flag. It prints a small function,
+            named <code>gcd</code> by default.
+        </p>
+
+        <procedure title="Install gcd">
+            <step>
+                Add the function to your shell startup file.
+                <tabs>
+                    <tab title="Bash">
+                        <code-block lang="bash"><![CDATA[
+gogws search --completion bash >> ~/.bashrc
+]]></code-block>
+                    </tab>
+                    <tab title="Zsh">
+                        <code-block lang="bash"><![CDATA[
+gogws search --completion zsh >> ~/.zshrc
+]]></code-block>
+                    </tab>
+                    <tab title="Fish">
+                        <code-block lang="shell"><![CDATA[
+gogws search --completion fish >> ~/.config/fish/config.fish
+]]></code-block>
+                    </tab>
+                    <tab title="PowerShell">
+                        <code-block lang="powershell"><![CDATA[
+gogws search --completion powershell >> $PROFILE
+]]></code-block>
+                    </tab>
+                </tabs>
+            </step>
+            <step>Open a new terminal.</step>
+        </procedure>
+
+        <p>
+            Use <code>--alias</code> to choose other names, for example
+            <code>%tool_call% search --completion zsh --alias gcd,smartcd,goto,...</code>.
+        </p>
+    </chapter>
+
+    <chapter title="Jump with gcd" id="scope_chapter-gcd">
+        <p>
+            <code>gcd</code> is a shell function: it runs <code>%tool_call% search --cd</code> and changes to the
+            result.
+        </p>
+        <code-block lang="shell"><![CDATA[
+$ gcd infra-tools
+$ pwd
+/work/top/mid/deep/infra-tools
+]]></code-block>
+
+        <tip>
+            You can use <code>--scope</code> with the <code>gcd</code> function to specify the scope of the search.
+        </tip>
+
+        <p><code>--cd</code> prints the path instead of the table:</p>
+        <list>
+            <li>One match: the path is printed and <code>gcd</code> changes to it.</li>
+            <li>Several matches: you pick one in a list. This needs an interactive terminal.</li>
+            <li>No match: an error, and you stay where you are.</li>
+        </list>
+    </chapter>
+</topic>

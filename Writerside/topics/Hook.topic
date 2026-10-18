@@ -1,0 +1,392 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic
+        SYSTEM "https://resources.jetbrains.com/writerside/1.0/xhtml-entities.dtd">
+<topic xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="https://resources.jetbrains.com/writerside/1.0/topic.v2.xsd"
+       title="Hook" id="Hook">
+
+    <web-summary>
+        Run scripts before and after %tool_name% commands with hooks: locations, naming, per-project and per-system
+        hooks, trust and environment variables.
+    </web-summary>
+
+    <p>
+        A hook is a script that %tool_name% runs before or after a command. Use hooks to install dependencies
+        after a clone, generate code after a pull, or notify a tool when a fetch is done.
+    </p>
+
+    <chapter title="How it works" id="hook_chapter-how-it-works">
+        <p>
+            For commands that work on every project, such as <code>ff</code> and <code>fetch</code>, hooks run
+            at two levels: once for the whole workspace, and once around the git operation of each project.
+        </p>
+        <code-block lang="mermaid"><![CDATA[
+flowchart TD
+    pre["pre-ff<br/>(workspace)"] --> ppre["api.pre-ff<br/>(project)"]
+    ppre --> git["git pull"]
+    git --> ppost["api.post-ff<br/>(project)"]
+    ppost --> post["post-ff<br/>(workspace)"]
+    pre -. fails .-> stop["command stops"]
+    ppre -. fails .-> failed["project fails, git is skipped"]
+    git -. fails .-> failed2["project fails, post hook is skipped"]
+]]></code-block>
+        <p>
+            Project hooks run in parallel, one per project, like the git operation they surround.
+        </p>
+    </chapter>
+
+    <chapter title="Quick start" id="hook_chapter-quick-start">
+        <procedure title="Run a script after each ff">
+            <step>
+                Create the file <path>.gws/hooks/post-ff.sh</path> in your workspace:
+                <code-block lang="bash"><![CDATA[
+#!/usr/bin/env bash
+echo "$GOGWS_PULLED repositories updated"
+]]></code-block>
+            </step>
+            <step>
+                Run <code>%tool_call% ff</code>.
+            </step>
+            <step>
+                %tool_name% asks before running a hook it has never seen. Answer <code>t</code> to run it and
+                trust this file.
+            </step>
+        </procedure>
+    </chapter>
+
+    <chapter title="Where to put hooks" id="hook_chapter-location">
+        <table>
+            <tr>
+                <td>Folder</td>
+                <td>Applies to</td>
+                <td>Trust</td>
+            </tr>
+            <tr>
+                <td><path>&lt;workspace&gt;/.gws/hooks/</path></td>
+                <td>This workspace</td>
+                <td>Needs your approval</td>
+            </tr>
+            <tr>
+                <td><path>~/.gws/hooks/</path></td>
+                <td>Every workspace</td>
+                <td>Always trusted</td>
+            </tr>
+        </table>
+        <p>
+            Inside a hooks folder, a <path>windows</path>, <path>linux</path> or <path>darwin</path> subfolder holds
+            hooks for that system only.
+        </p>
+        <code-block lang="shell"><![CDATA[
+.gws/hooks/
+├── post-ff.sh
+├── api.post-ff.sh
+└── windows/
+    └── post-ff.ps1
+]]></code-block>
+        <p>For a given hook, %tool_name% uses the <b>first</b> file found in this order:</p>
+        <list type="decimal">
+            <li><path>&lt;workspace&gt;/.gws/hooks/&lt;system&gt;/</path></li>
+            <li><path>&lt;workspace&gt;/.gws/hooks/</path></li>
+            <li><path>~/.gws/hooks/&lt;system&gt;/</path></li>
+            <li><path>~/.gws/hooks/</path></li>
+        </list>
+        <note>
+            Only one file runs. A local hook replaces the global hook of the same name, and a system-specific hook
+            replaces the generic one. In the example above, Windows runs <path>windows/post-ff.ps1</path> and
+            every other system runs <path>post-ff.sh</path>.
+        </note>
+    </chapter>
+
+    <chapter title="Naming" id="hook_chapter-naming">
+        <p>A hook file is named:</p>
+        <code-block lang="shell"><![CDATA[
+[<project>.]<hook>[.<extension>]
+]]></code-block>
+        <p>
+            Without the <code>&lt;project&gt;.</code> prefix it is a workspace hook. With it, it is a project hook.
+        </p>
+        <table>
+            <tr>
+                <td>Hook</td>
+                <td>Runs</td>
+            </tr>
+            <tr>
+                <td><code>pre-init</code>, <code>post-init</code></td>
+                <td>Around <code>init projects</code> and <code>init provider</code></td>
+            </tr>
+            <tr>
+                <td><code>pre-update</code>, <code>post-update</code></td>
+                <td>Around <code>update</code></td>
+            </tr>
+            <tr>
+                <td><code>pre-clone</code>, <code>post-clone</code></td>
+                <td>Around each repository cloned by <code>clone</code> or <code>update</code></td>
+            </tr>
+            <tr>
+                <td><code>pre-fetch</code>, <code>post-fetch</code></td>
+                <td>Around <code>fetch</code></td>
+            </tr>
+            <tr>
+                <td><code>pre-ff</code>, <code>post-ff</code></td>
+                <td>Around <code>ff</code></td>
+            </tr>
+            <tr>
+                <td><code>pre-check</code>, <code>post-check</code></td>
+                <td>Around <code>check</code></td>
+            </tr>
+        </table>
+        <p>The extension chooses how the script is run.</p>
+        <table>
+            <tr>
+                <td>Extension</td>
+                <td>Runs with</td>
+            </tr>
+            <tr>
+                <td><code>.sh</code></td>
+                <td><code>bash</code>, or <code>sh</code> if bash is missing</td>
+            </tr>
+            <tr>
+                <td><code>.bash</code></td>
+                <td><code>bash</code></td>
+            </tr>
+            <tr>
+                <td><code>.ps1</code></td>
+                <td><code>pwsh</code>, or <code>powershell</code></td>
+            </tr>
+            <tr>
+                <td><code>.py</code></td>
+                <td><code>python3</code>, or <code>python</code></td>
+            </tr>
+            <tr>
+                <td><code>.cmd</code>, <code>.bat</code></td>
+                <td><code>cmd /c</code></td>
+            </tr>
+            <tr>
+                <td><code>.js</code></td>
+                <td><code>node</code></td>
+            </tr>
+            <tr>
+                <td>none</td>
+                <td>
+                    The file itself. On Linux and macOS it must be executable. On Windows it needs a shebang
+                    line such as <code>#!/usr/bin/env bash</code>.
+                </td>
+            </tr>
+        </table>
+        <note>
+            On Windows, <code>.sh</code> files run with the bash of Git for Windows, never with WSL.
+            A file with any other extension, such as <path>post-ff.rb</path>, is ignored.
+        </note>
+    </chapter>
+
+    <chapter title="Workspace hooks and project hooks" id="hook_chapter-levels">
+        <table>
+            <tr>
+                <td></td>
+                <td>Workspace hook</td>
+                <td>Project hook</td>
+            </tr>
+            <tr>
+                <td>Name</td>
+                <td><path>post-ff.sh</path></td>
+                <td><path>api.post-ff.sh</path></td>
+            </tr>
+            <tr>
+                <td>Runs</td>
+                <td>Once per command</td>
+                <td>Once per matching project, around its git operation</td>
+            </tr>
+            <tr>
+                <td>Working folder</td>
+                <td>The workspace folder</td>
+                <td>The project folder</td>
+            </tr>
+            <tr>
+                <td>Output</td>
+                <td>Shown in the terminal</td>
+                <td>Not shown, except in the progress of the project</td>
+            </tr>
+            <tr>
+                <td>Where to put it</td>
+                <td>Local or global hooks folder</td>
+                <td>Local hooks folder only</td>
+            </tr>
+            <tr>
+                <td>Commands</td>
+                <td>All the hooks above</td>
+                <td><code>fetch</code>, <code>ff</code>, <code>clone</code> and <code>update</code> (clone only)</td>
+            </tr>
+        </table>
+        <p>
+            The project name is the name of its folder. A project cloned in <path>libs/api</path> uses the
+            prefix <code>api.</code>. A project hook comes from the hooks folder of the workspace that lists the
+            project: a sub-workspace uses its own <path>.gws/hooks</path>.
+        </p>
+        <p>
+            <code>pre-clone</code> and <code>post-clone</code> are special: even without a project prefix they run
+            once for each cloned repository, in the progress of the repository. When both exist, the shared file
+            runs first, then the project file. <code>pre-clone</code> runs in the workspace folder because the
+            project does not exist yet, <code>post-clone</code> runs in the project folder.
+        </p>
+    </chapter>
+
+    <chapter title="When a hook fails" id="hook_chapter-failure">
+        <table>
+            <tr>
+                <td>Hook</td>
+                <td>If it exits with an error</td>
+            </tr>
+            <tr>
+                <td>Workspace <code>pre-*</code></td>
+                <td>The command stops before it starts.</td>
+            </tr>
+            <tr>
+                <td>Workspace <code>post-*</code></td>
+                <td>The command exits with an error.</td>
+            </tr>
+            <tr>
+                <td>Project <code>pre-*</code></td>
+                <td>The git operation is skipped and the project is reported as failed.</td>
+            </tr>
+            <tr>
+                <td>Project <code>post-*</code></td>
+                <td>The project is reported as failed.</td>
+            </tr>
+        </table>
+        <p>
+            A project <code>post-*</code> hook only runs if the git operation succeeded. A workspace
+            <code>post-*</code> hook runs even if some projects failed.
+        </p>
+    </chapter>
+
+    <chapter title="Trust" id="hook_chapter-trust">
+        <p>
+            A hook can run any code, so %tool_name% only runs a local or project hook after you approved that exact
+            file. Hooks of <path>~/.gws/hooks</path> are always trusted.
+        </p>
+        <p>
+            Approvals are stored in <path>~/.gws/trusted-hooks.yaml</path> with the path and the SHA-256 of the
+            file. A new file, or a file that changed since you trusted it, is asked again:
+        </p>
+        <code-block lang="shell"><![CDATA[
+[hook:project] Hook 'post-ff' found at: /work/ws/.gws/hooks/api.post-ff.sh
+Workspace: /work/ws
+This hook file is modified since it was trusted.
+
+Options:
+  [r] Run this hook once
+  [s] Skip this hook
+  [t] Run and trust this file (asked again if it changes)
+Choose [r/s/t]:
+]]></code-block>
+        <p>The questions are asked before the command starts. Change this with <code>-t, --trust-hooks</code>:</p>
+        <table>
+            <tr>
+                <td>Value</td>
+                <td>Behavior</td>
+            </tr>
+            <tr>
+                <td><code>ask</code> (default)</td>
+                <td>Ask for each untrusted hook.</td>
+            </tr>
+            <tr>
+                <td><code>all</code></td>
+                <td>Run untrusted hooks without asking. They are not remembered.</td>
+            </tr>
+            <tr>
+                <td><code>skip</code></td>
+                <td>Skip untrusted hooks.</td>
+            </tr>
+        </table>
+        <note>
+            Without an interactive terminal, for example in a CI job, an untrusted hook cannot be approved: it is
+            skipped with a warning. Use <code>--trust-hooks=all</code> there.
+        </note>
+    </chapter>
+
+    <chapter title="Conflicts" id="hook_chapter-conflicts">
+        <p>
+            A folder can contain only one file per hook and project. <path>post-ff.sh</path> next to
+            <path>post-ff.ps1</path>, or <path>api.post-ff</path> next to <path>api.post-ff.sh</path>, is a conflict.
+            The command stops and lists the files:
+        </p>
+        <code-block lang="shell"><![CDATA[
+conflicting hooks for post-ff in .gws/hooks/windows: post-ff.cmd, post-ff.ps1 — keep only one, then check with 'gogws doctor run HookConflict'
+]]></code-block>
+        <p>
+            Run <code>%tool_call% doctor run</code> to list the conflicts of every system folder of every
+            workspace.
+        </p>
+    </chapter>
+
+    <chapter title="Environment variables" id="hook_chapter-environment">
+        <p>Hooks receive these variables on top of your own environment.</p>
+        <table>
+            <tr>
+                <td>Variable</td>
+                <td>Value</td>
+            </tr>
+            <tr>
+                <td><code>GOGWS_COMMAND</code></td>
+                <td>The command: <code>ff</code>, <code>fetch</code>, <code>update</code>...</td>
+            </tr>
+            <tr>
+                <td><code>GOGWS_WORKSPACE_DIR</code></td>
+                <td>Absolute path of the workspace. <code>GOGWS_WORKSPACE</code> holds the same value.</td>
+            </tr>
+            <tr>
+                <td><code>GOGWS_HOOK_NAME</code></td>
+                <td>The hook: <code>post-ff</code>...</td>
+            </tr>
+            <tr>
+                <td><code>GOGWS_HOOK_ORIGIN</code></td>
+                <td><code>local</code>, <code>global</code> or <code>project</code></td>
+            </tr>
+            <tr>
+                <td><code>GOGWS_PROJECT_DIR</code>, <code>GOGWS_PROJECT_NAME</code></td>
+                <td>Project hooks, and clone hooks: absolute path and name of the project</td>
+            </tr>
+            <tr>
+                <td><code>GOGWS_PROJECTS</code></td>
+                <td>
+                    <code>post-init</code>, <code>post-update</code>, <code>post-check</code>: absolute paths of the
+                    projects, one per line
+                </td>
+            </tr>
+            <tr>
+                <td><code>GOGWS_FETCHED</code></td>
+                <td><code>post-fetch</code>: number of repositories fetched successfully</td>
+            </tr>
+            <tr>
+                <td><code>GOGWS_PULLED</code></td>
+                <td><code>post-ff</code>: number of repositories updated successfully</td>
+            </tr>
+        </table>
+    </chapter>
+
+    <chapter title="Examples" id="hook_chapter-examples">
+        <p>Install dependencies of the projects that were just cloned, in <path>.gws/hooks/post-update.sh</path>:</p>
+        <code-block lang="bash"><![CDATA[
+#!/usr/bin/env bash
+printf '%s\n' "$GOGWS_PROJECTS" | while read -r dir; do
+  [ -n "$dir" ] && [ -f "$dir/package.json" ] && (cd "$dir" && npm ci)
+done
+]]></code-block>
+        <p>Regenerate code after the project <code>api</code> is updated, in <path>.gws/hooks/api.post-ff.sh</path>:</p>
+        <code-block lang="bash"><![CDATA[
+#!/usr/bin/env bash
+make generate
+]]></code-block>
+        <p>The same hook for Windows only, in <path>.gws/hooks/windows/api.post-ff.ps1</path>:</p>
+        <code-block lang="powershell"><![CDATA[
+Write-Host "Updated $env:GOGWS_PROJECT_NAME in $env:GOGWS_PROJECT_DIR"
+]]></code-block>
+    </chapter>
+
+    <chapter title="See also" id="hook_chapter-see-also">
+        <list>
+            <li><a href="Workspace-file.topic">Workspace file</a></li>
+            <li><a href="Completion.topic">Completion</a></li>
+        </list>
+    </chapter>
+</topic>

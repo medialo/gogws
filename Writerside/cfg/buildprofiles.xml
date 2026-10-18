@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE buildprofiles SYSTEM "https://resources.jetbrains.com/writerside/1.0/build-profiles.dtd">
+<buildprofiles xsi:noNamespaceSchemaLocation="https://resources.jetbrains.com/writerside/1.0/build-profiles.xsd"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+    <variables>
+        <include-in-head>no-footer.html</include-in-head>
+        <web-root>https://medialo.github.io/gogws</web-root>
+        <generate-canonicals>true</generate-canonicals>
+        <generate-sitemap-url-prefix>https://medialo.github.io/gogws</generate-sitemap-url-prefix>
+    </variables>
+    <sitemap priority="0.5" change-frequency="monthly"/>
+    <llms-txt/>
+    <build-profile instance="gogws">
+        <variables>
+            <noindex-content>false</noindex-content>
+        </variables>
+    </build-profile>
+
+</buildprofiles>

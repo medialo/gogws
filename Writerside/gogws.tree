@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE instance-profile
+        SYSTEM "https://resources.jetbrains.com/writerside/1.0/product-profile.dtd">
+
+<instance-profile id="gogws"
+                 name="gogws docs"
+                 start-page="Discover-Gogws.topic">
+
+    <toc-element topic="Discover-Gogws.topic">
+        <toc-element topic="Getting-started.topic"/>
+        <toc-element topic="Completion.topic"/>
+        <toc-element topic="Configuration.topic"/>
+    </toc-element>
+    <toc-element toc-title="Configure workspace">
+        <toc-element topic="Workspace-file.topic"/>
+        <toc-element topic="Hook.topic">
+        </toc-element>
+        <toc-element topic="Gws-file.topic"/>
+    </toc-element>
+    <toc-element toc-title="Use Gogws">
+        <toc-element topic="Scope.topic"/>
+        <toc-element topic="Quick-jump-alias.topic"/>
+    </toc-element>
+    <toc-element topic="Use-cases.topic"/>
+</instance-profile>

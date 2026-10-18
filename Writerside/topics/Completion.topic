@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic
+        SYSTEM "https://resources.jetbrains.com/writerside/1.0/xhtml-entities.dtd">
+<topic xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="https://resources.jetbrains.com/writerside/1.0/topic.v2.xsd"
+       title="Completion" id="Completion">
+
+    <web-summary>
+        Enable %tool_name% shell completion for bash, zsh, fish and PowerShell to complete commands, flags and flag
+        values such as --scope.
+    </web-summary>
+
+    <p>
+        %tool_name% can complete commands, flags and flag values (such as <code>--scope</code>) when you press
+        <shortcut>Tab</shortcut>.
+    </p>
+
+    <note>
+        Running <code>%tool_call% completion &lt;shell&gt;</code> only prints the completion script on the standard
+        output.
+    </note>
+
+    <chapter title="Enable completion" id="completion_chapter-enable">
+        <p>Supported shells are bash, zsh, fish and PowerShell.</p>
+
+        <tabs>
+            <tab title="Bash">
+                <p>Add this line to <path>~/.bashrc</path>:</p>
+                <code-block lang="bash"><![CDATA[
+source <(%tool_call% completion bash)
+]]></code-block>
+                <p>Completion for bash requires the <code>bash-completion</code> package.</p>
+            </tab>
+            <tab title="Zsh">
+                <p>Add these lines to <path>~/.zshrc</path>:</p>
+                <code-block lang="bash"><![CDATA[
+autoload -U compinit && compinit
+source <(%tool_call% completion zsh)
+]]></code-block>
+            </tab>
+            <tab title="Fish">
+                <p>Add this line to <path>~/.config/fish/config.fish</path>:</p>
+                <code-block lang="shell"><![CDATA[
+%tool_call% completion fish | source
+]]></code-block>
+            </tab>
+            <tab title="PowerShell">
+                <p>Open your profile with <code>notepad $PROFILE</code> and add this line:</p>
+                <code-block lang="powershell"><![CDATA[
+%tool_call% completion powershell | Out-String | Invoke-Expression
+]]></code-block>
+                <p>
+                    If the profile file does not exist yet, create it first with
+                    <code>New-Item -ItemType File -Force $PROFILE</code>.
+                </p>
+            </tab>
+        </tabs>
+
+        <p>
+            Next, open a new terminal, then type <code>%tool_call% </code> followed by <shortcut>Tab</shortcut>.
+        </p>
+    </chapter>
+
+</topic>

@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic
+        SYSTEM "https://resources.jetbrains.com/writerside/1.0/xhtml-entities.dtd">
+<topic xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="https://resources.jetbrains.com/writerside/1.0/topic.v2.xsd"
+       title="Getting started" id="Getting-started">
+
+    <web-summary>
+        Install %tool_name% on Windows, Linux or macOS: build from sources, use go install, download a release binary
+        or install it with Scoop.
+    </web-summary>
+
+    <p>
+        %tool_name% is a single self-contained binary. Pick the installation method that you prefer:
+    </p>
+
+    <note>
+        Go is only required for the first two methods. The binary download and Scoop need nothing else
+        (Scoop itself installs Git as a dependency).
+    </note>
+
+    <chapter title="Prerequisites" id="getting-started_chapter-prerequisites">
+        <list>
+            <li>Git installed (not included in binary)</li>
+            <li>Go 1.27 or later, for building from sources and for <code>go install</code></li>
+        </list>
+    </chapter>
+
+    <chapter title="Install from sources" id="getting-started_chapter-sources">
+        <procedure title="Build gogws from the repository">
+            <step>Clone the repository.</step>
+            <step>Build the <code>cmd/gogws</code> package into the <path>build</path> directory.</step>
+            <step>Copy the binary to a directory that is on your <code>PATH</code>.</step>
+            <step>Check the installation with <code>gogws --version</code>.</step>
+        </procedure>
+
+        <tabs>
+            <tab title="Windows">
+                <code-block lang="powershell"><![CDATA[
+git clone https://github.com/medialo/gogws.git
+Set-Location gogws
+go build -o build/gogws.exe ./cmd/gogws
+
+$dest = "$env:LOCALAPPDATA\Programs\gogws"
+New-Item -ItemType Directory -Force $dest | Out-Null
+Copy-Item build/gogws.exe $dest
+[Environment]::SetEnvironmentVariable(
+    "Path", "$([Environment]::GetEnvironmentVariable('Path', 'User'));$dest", "User")
+
+gogws --version
+]]></code-block>
+            </tab>
+            <tab title="Linux">
+                <code-block lang="bash"><![CDATA[
+git clone https://github.com/medialo/gogws.git
+cd gogws
+go build -o build/gogws ./cmd/gogws
+
+sudo install -m 0755 build/gogws /usr/local/bin/gogws
+
+gogws --version
+]]></code-block>
+            </tab>
+            <tab title="macOS">
+                <code-block lang="bash"><![CDATA[
+git clone https://github.com/medialo/gogws.git
+cd gogws
+go build -o build/gogws ./cmd/gogws
+
+sudo install -m 0755 build/gogws /usr/local/bin/gogws
+
+gogws --version
+]]></code-block>
+            </tab>
+        </tabs>
+
+        <tip>
+            The repository also ships a Makefile: <code>make build</code> produces the same
+            <path>build/gogws</path> binary.
+        </tip>
+    </chapter>
+
+    <chapter title="Install with go install" id="getting-started_chapter-go-install">
+        <p>
+            <code>go install</code> downloads, builds and installs gogws in one command. The binary lands in
+            <code>$(go env GOPATH)/bin</code>, which must be on your <code>PATH</code>.
+        </p>
+
+        <tabs>
+            <tab title="Windows">
+                <code-block lang="powershell"><![CDATA[
+go install github.com/medialo/gogws/cmd/gogws@latest
+
+$gobin = "$(go env GOPATH)\bin"
+[Environment]::SetEnvironmentVariable(
+    "Path", "$([Environment]::GetEnvironmentVariable('Path', 'User'));$gobin", "User")
+
+gogws --version
+]]></code-block>
+            </tab>
+            <tab title="Linux">
+                <code-block lang="bash"><![CDATA[
+go install github.com/medialo/gogws/cmd/gogws@latest
+
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.profile
+export PATH="$PATH:$(go env GOPATH)/bin"
+
+gogws --version
+]]></code-block>
+            </tab>
+            <tab title="macOS">
+                <code-block lang="bash"><![CDATA[
+go install github.com/medialo/gogws/cmd/gogws@latest
+
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zprofile
+export PATH="$PATH:$(go env GOPATH)/bin"
+
+gogws --version
+]]></code-block>
+            </tab>
+        </tabs>
+    </chapter>
+
+    <chapter title="Download the binary" id="getting-started_chapter-binary">
+        <p>
+            Prebuilt archives for every release are published on the
+            <a href="https://github.com/medialo/gogws/releases">GitHub releases page</a>.
+            Each release also contains a <path>checksums.txt</path> file.
+        </p>
+
+        <table>
+            <tr>
+                <td>System</td>
+                <td>Architecture</td>
+                <td>Archive</td>
+            </tr>
+            <tr>
+                <td>Windows</td>
+                <td>amd64</td>
+                <td><code>gogws_VERSION_Windows_x86_64.zip</code></td>
+            </tr>
+            <tr>
+                <td>Windows</td>
+                <td>arm64</td>
+                <td><code>gogws_VERSION_Windows_arm64.zip</code></td>
+            </tr>
+            <tr>
+                <td>Linux</td>
+                <td>amd64</td>
+                <td><code>gogws_VERSION_Linux_x86_64.tar.gz</code></td>
+            </tr>
+            <tr>
+                <td>Linux</td>
+                <td>arm64</td>
+                <td><code>gogws_VERSION_Linux_arm64.tar.gz</code></td>
+            </tr>
+            <tr>
+                <td>macOS</td>
+                <td>amd64</td>
+                <td><code>gogws_VERSION_Darwin_x86_64.tar.gz</code></td>
+            </tr>
+            <tr>
+                <td>macOS</td>
+                <td>arm64</td>
+                <td><code>gogws_VERSION_Darwin_arm64.tar.gz</code></td>
+            </tr>
+        </table>
+
+        <p>
+            In the scripts below, <code>VERSION</code> is the release number without the leading
+            <code>v</code> (for example <code>%current_release_version_num%</code> for the tag <code>v%current_release_version_num%</code>).
+        </p>
+
+        <tabs>
+            <tab title="Windows">
+                <code-block lang="powershell" collapsible="true" collapsed-title="install_from_release.ps1"><![CDATA[
+$version = %current_release_version_num%
+$arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x86_64" }
+$archive = "gogws_${version}_Windows_${arch}.zip"
+$base = "https://github.com/medialo/gogws/releases/download/v$version"
+
+Invoke-WebRequest "$base/$archive" -OutFile $archive
+Invoke-WebRequest "$base/checksums.txt" -OutFile checksums.txt
+
+$expected = (Select-String -Path checksums.txt -Pattern $archive).Line.Split(" ")[0]
+if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne $expected.ToUpper()) { throw "Checksum mismatch" }
+
+$dest = "$env:LOCALAPPDATA\Programs\gogws"
+Expand-Archive $archive -DestinationPath $dest -Force
+[Environment]::SetEnvironmentVariable(
+    "Path", "$([Environment]::GetEnvironmentVariable('Path', 'User'));$dest", "User")
+
+& "$dest\gogws.exe" --version
+]]></code-block>
+            </tab>
+            <tab title="Linux">
+                <code-block lang="bash" collapsible="true" collapsed-title="install_from_release.sh"><![CDATA[
+VERSION=%current_release_version_num%
+case "$(uname -m)" in
+  x86_64) ARCH=x86_64 ;;
+  aarch64|arm64) ARCH=arm64 ;;
+esac
+ARCHIVE="gogws_${VERSION}_Linux_${ARCH}.tar.gz"
+BASE="https://github.com/medialo/gogws/releases/download/v${VERSION}"
+
+curl -fsSLO "${BASE}/${ARCHIVE}"
+curl -fsSLO "${BASE}/checksums.txt"
+grep " ${ARCHIVE}\$" checksums.txt | sha256sum -c -
+
+tar -xzf "${ARCHIVE}" gogws
+sudo install -m 0755 gogws /usr/local/bin/gogws
+
+gogws --version
+]]></code-block>
+            </tab>
+            <tab title="macOS">
+                <code-block lang="bash" collapsible="true" collapsed-title="install_from_release.sh"><![CDATA[
+VERSION=%current_release_version_num%
+case "$(uname -m)" in
+  x86_64) ARCH=x86_64 ;;
+  arm64) ARCH=arm64 ;;
+esac
+ARCHIVE="gogws_${VERSION}_Darwin_${ARCH}.tar.gz"
+BASE="https://github.com/medialo/gogws/releases/download/v${VERSION}"
+
+curl -fsSLO "${BASE}/${ARCHIVE}"
+curl -fsSLO "${BASE}/checksums.txt"
+grep " ${ARCHIVE}\$" checksums.txt | shasum -a 256 -c -
+
+tar -xzf "${ARCHIVE}" gogws
+sudo install -m 0755 gogws /usr/local/bin/gogws
+
+gogws --version
+]]></code-block>
+            </tab>
+        </tabs>
+    </chapter>
+
+    <chapter title="Install with Scoop (Windows)" id="getting-started_chapter-scoop">
+        <procedure title="Install gogws from the Scoop bucket">
+            <step>Add the gogws bucket.</step>
+            <step>Install the <code>gogws</code> package.</step>
+            <step>Run <code>scoop update gogws</code> whenever a new release is available.</step>
+        </procedure>
+
+        <code-block lang="powershell"><![CDATA[
+scoop bucket add scoop-hub https://github.com/medialo/scoop-hub
+scoop install gogws
+
+gogws --version
+]]></code-block>
+    </chapter>
+
+    <chapter title="Verify the installation" id="getting-started_chapter-verify">
+        <code-block lang="shell"><![CDATA[
+gogws --version
+]]></code-block>
+
+        <note>
+            gogws checks for a newer release at most once every 24 hours in interactive sessions and prints
+            a notice when one is available. Set <code>GOGWS_UPDATE_CHECK=false</code> to disable it.
+        </note>
+    </chapter>
+
+</topic>

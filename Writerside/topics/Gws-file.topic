@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic
+        SYSTEM "https://resources.jetbrains.com/writerside/1.0/xhtml-entities.dtd">
+<topic xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="https://resources.jetbrains.com/writerside/1.0/topic.v2.xsd"
+       title="Gws file" id="Gws-file">
+
+    <web-summary>
+        Describe a %tool_name% workspace with the line-based gws format: projects.gws and workspaces.gws syntax,
+        remotes, comments and ignore rules.
+    </web-summary>
+
+    <warning>
+        The <a href="Workspace-file.topic">standard format</a> is the recommended way to describe a workspace.
+        The gws format is still supported for backward compatibility and because it is very quick to write by hand.
+    </warning>
+
+    <p>
+        The gws format describes a workspace with plain text files where each line is one repository. It uses two
+        files: one for the projects, one for the sub-workspaces. Both are optional.
+    </p>
+
+    <chapter title="Files and location" id="gws-file_chapter-location">
+        <table>
+            <tr>
+                <td>Content</td>
+                <td>In the <path>.gws</path> folder</td>
+                <td>At the workspace root</td>
+            </tr>
+            <tr>
+                <td>Projects</td>
+                <td><path>.gws/projects.gws</path></td>
+                <td><path>.projects.gws</path></td>
+            </tr>
+            <tr>
+                <td>Sub-workspaces</td>
+                <td><path>.gws/workspaces.gws</path></td>
+                <td><path>.workspaces.gws</path></td>
+            </tr>
+        </table>
+        <p>
+            A folder is a workspace as soon as one of these files exists. Each file is looked for on its own: if it
+            exists in both places, the one in <path>.gws</path> is used and %tool_name% warns you with
+            <code>Duplicate file found, please remove the legacy file</code>.
+        </p>
+        <note>
+            If a folder also contains a standard <path>workspaces.yaml</path> (or <code>.yml</code>,
+            <code>.json</code>, <code>.toml</code>), the standard file is used and the gws files are ignored with a
+            warning. Do not mix both formats in the same folder.
+        </note>
+    </chapter>
+
+    <chapter title="Projects" id="gws-file_chapter-projects">
+        <p>Each line declares one repository: its folder, then one or more remotes separated by <code>|</code>.</p>
+        <code-block lang="shell"><![CDATA[
+path | url [name] [| url [name] ...]
+]]></code-block>
+        <list>
+            <li>
+                <code>path</code> is relative to the workspace folder. Absolute paths and paths starting with
+                <code>~/</code> are also accepted.
+            </li>
+            <li>
+                <code>url</code> is the git URL of the remote.
+            </li>
+            <li>
+                <code>name</code> is optional. Without it, the first remote is called <code>origin</code>, the second
+                <code>upstream</code>, and any other one <code>origin</code>. Give a name to every remote beyond the
+                second.
+            </li>
+        </list>
+        <p>Example of <path>.gws/projects.gws</path>:</p>
+        <code-block lang="shell"><![CDATA[
+api          | git@example.com:org/api.git
+web          | git@example.com:org/web.git
+libs/shared  | git@example.com:me/shared.git | git@example.com:org/shared.git upstream
+]]></code-block>
+        <p>
+            Here <path>libs/shared</path> has two remotes: <code>origin</code> and <code>upstream</code>. The name of
+            a project is the name of its folder, so this one is called <code>shared</code>.
+        </p>
+    </chapter>
+
+    <chapter title="Sub-workspaces" id="gws-file_chapter-workspaces">
+        <p>Same idea for folders that are workspaces themselves, with a single remote.</p>
+        <code-block lang="shell"><![CDATA[
+path | url [name]
+path | folder
+]]></code-block>
+        <list>
+            <li>
+                <code>folder</code> declares a plain folder with no remote.
+            </li>
+            <li>
+                A path of <code>.</code> is the remote of the workspace itself. The root then appears as a git
+                repository in <code>%tool_call% status</code>.
+            </li>
+            <li>
+                Only the first remote of the line is read. A sub-workspace has its own configuration files and can
+                contain sub-workspaces too.
+            </li>
+        </list>
+        <p>Example of <path>.gws/workspaces.gws</path>:</p>
+        <code-block lang="shell"><![CDATA[
+.      | git@example.com:org/my-workspace.git
+tools  | git@example.com:org/tools.git
+notes  | folder
+]]></code-block>
+    </chapter>
+
+    <chapter title="Comments and blank lines" id="gws-file_chapter-comments">
+        <p>Blank lines are ignored. A <code>#</code> starts a comment, on its own line or at the end of a line.</p>
+        <code-block lang="shell"><![CDATA[
+# main services
+api  | git@example.com:org/api.git
+web  | git@example.com:org/web.git   # the front end
+]]></code-block>
+        <warning>
+            Everything after a <code>#</code> is dropped, even inside a URL. A URL such as
+            <code>https://example.com/org/api.git#main</code> is cut before the <code>#</code>.
+        </warning>
+    </chapter>
+
+    <chapter title="Errors" id="gws-file_chapter-errors">
+        <p>
+            A line that cannot be read makes %tool_name% ignore the whole file it belongs to and print a
+            <code>Failed to read workspace configuration</code> warning with the line number. The other file is still
+            used: a mistake in the projects file does not hide your sub-workspaces, and the other way round.
+        </p>
+        <table>
+            <tr>
+                <td>Message</td>
+                <td>Cause</td>
+            </tr>
+            <tr>
+                <td><code>invalid format: expected 'path | url [name] [| url2 name2 ...]'</code></td>
+                <td>A project line without <code>|</code>.</td>
+            </tr>
+            <tr>
+                <td><code>no remotes defined for project &lt;path&gt;</code></td>
+                <td>A project line with nothing after the <code>|</code>.</td>
+            </tr>
+            <tr>
+                <td><code>invalid format: expected 'path | url [name]'</code></td>
+                <td>A sub-workspace line without <code>|</code>.</td>
+            </tr>
+            <tr>
+                <td><code>empty remote URL or type for workspace &lt;path&gt;</code></td>
+                <td>A sub-workspace line with nothing after the <code>|</code>. Write a URL or <code>folder</code>.</td>
+            </tr>
+        </table>
+        <p>
+            Messages are prefixed with <code>error parsing line N</code>. For sub-workspaces they also name the file:
+            <code>error parsing line N in workspaces.gws</code>.
+        </p>
+    </chapter>
+
+    <chapter title="Ignoring projects" id="gws-file_chapter-ignore">
+        <p>
+            The optional file <path>.ignore.gws</path>, at the workspace root and not in <path>.gws</path>, removes
+            projects from every command. It contains one regular expression per line, tested against the absolute
+            path of each project. Blank lines and lines starting with <code>#</code> are skipped.
+        </p>
+        <code-block lang="shell"><![CDATA[
+# anything under an archive folder
+[/\\]archive[/\\]
+# legacy projects
+-legacy$
+]]></code-block>
+        <note>
+            On Windows, paths use <code>\</code>, so write <code>[/\\]</code> to match a separator on every system.
+            A pattern that is not a valid regular expression is skipped without any message.
+        </note>
+    </chapter>
+
+    <chapter title="Good to know" id="gws-file_chapter-good-to-know">
+        <p>
+            When a command such as <code>%tool_call% add project</code> changes a gws file, the file is written again
+            from scratch: comments are lost, and a remote named <code>origin</code> is written as a bare URL.
+        </p>
+    </chapter>
+
+    <chapter title="See also" id="gws-file_chapter-see-also">
+        <list>
+            <li><a href="Workspace-file.topic">Workspace file</a></li>
+            <li><a href="Hook.topic">Hook</a></li>
+        </list>
+    </chapter>
+</topic>

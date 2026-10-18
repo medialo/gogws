@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic
+        SYSTEM "https://resources.jetbrains.com/writerside/1.0/xhtml-entities.dtd">
+<topic xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="https://resources.jetbrains.com/writerside/1.0/topic.v2.xsd"
+       title="Configuration" id="Configuration">
+
+    <web-summary>
+        Configure %tool_name% with config.yaml or the config command: every key, its default and environment
+        variable, and how flags, environment and file override each other.
+    </web-summary>
+
+    <p>
+        %tool_name% has a user configuration file that sets your default options, such as the number of parallel
+        operations or the output format. It applies to every workspace and every command.
+    </p>
+
+    <chapter title="The configuration file" id="configuration_chapter-file">
+        <p>The file is <path>~/.gws/config.yaml</path>, in the <path>.gws</path> folder of your home directory.</p>
+        <list>
+            <li>It is optional. Without it, every key has its default value.</li>
+            <li>It is plain YAML, with one key per line.</li>
+            <li>Keys that %tool_name% does not know are ignored.</li>
+        </list>
+        <code-block lang="yaml"><![CDATA[
+parallel: 8
+format: text
+no-color: false
+provider-cache-ttl: 12h
+update-check: true
+global-fallback: true
+]]></code-block>
+        <note>
+            Use <code>--config &lt;file&gt;</code> to read another file for one command.
+        </note>
+    </chapter>
+
+    <chapter title="Keys" id="configuration_chapter-keys">
+        <table>
+            <tr>
+                <td>Key</td>
+                <td>Type</td>
+                <td>Default</td>
+                <td>Flag</td>
+                <td>Description</td>
+            </tr>
+            <tr>
+                <td><code>parallel</code></td>
+                <td>integer, 1 or more</td>
+                <td><code>5</code></td>
+                <td><code>-p</code>, <code>--parallel</code></td>
+                <td>Number of repositories processed at the same time.</td>
+            </tr>
+            <tr>
+                <td><code>format</code></td>
+                <td><code>text</code>, <code>json</code> or <code>yaml</code></td>
+                <td><code>text</code></td>
+                <td><code>--format</code></td>
+                <td>Output format of <code>%tool_call% status</code>.</td>
+            </tr>
+            <tr>
+                <td><code>theme</code></td>
+                <td>path</td>
+                <td>none</td>
+                <td><code>--theme</code></td>
+                <td>YAML file that changes the colors of the output.</td>
+            </tr>
+            <tr>
+                <td><code>no-color</code></td>
+                <td>boolean</td>
+                <td><code>false</code></td>
+                <td><code>--no-color</code></td>
+                <td>Disable colored output.</td>
+            </tr>
+            <tr>
+                <td><code>errexit</code></td>
+                <td>boolean</td>
+                <td><code>false</code></td>
+                <td><code>-e</code>, <code>--errexit</code></td>
+                <td>Stop starting new jobs after the first error.</td>
+            </tr>
+            <tr>
+                <td><code>provider-cache-ttl</code></td>
+                <td>duration</td>
+                <td><code>24h</code></td>
+                <td>none</td>
+                <td>
+                    How long a workspace discovered from a GitHub or GitLab organization is kept before
+                    <code>update --refresh-providers</code> reads it again.
+                </td>
+            </tr>
+            <tr>
+                <td><code>update-check</code></td>
+                <td>boolean</td>
+                <td><code>true</code></td>
+                <td>none</td>
+                <td>Look once a day whether a newer %tool_name% release exists, and print a notice.</td>
+            </tr>
+            <tr>
+                <td><code>global-fallback</code></td>
+                <td>boolean</td>
+                <td><code>true</code></td>
+                <td>none</td>
+                <td>Use the global workspace when no workspace is found from the current folder.</td>
+            </tr>
+            <tr>
+                <td><code>trusted-workspaces</code></td>
+                <td>list of paths</td>
+                <td>empty</td>
+                <td>none</td>
+                <td>
+                    Deprecated. It no longer trusts anything: hooks are trusted file by file, see
+                    <a href="Hook.topic">Hook</a>.
+                </td>
+            </tr>
+        </table>
+
+        <chapter title="Value formats" id="configuration_chapter-formats">
+            <list>
+                <li>
+                    <b>Boolean</b>: <code>true</code> or <code>false</code>. In the file, write them as plain YAML
+                    booleans.
+                </li>
+                <li>
+                    <b>Duration</b>: a number with a unit, such as <code>30m</code>, <code>12h</code> or
+                    <code>1h30m</code>.
+                </li>
+                <li>
+                    <b>Theme</b>: a YAML file with a <code>colors</code> section (<code>title</code>,
+                    <code>success</code>, <code>warning</code>, <code>error</code>, <code>info</code>,
+                    <code>subtle</code>, <code>path</code>, <code>branch</code>, <code>remote</code>,
+                    <code>status</code>, <code>stats</code>) and a <code>styles</code> section
+                    (<code>title_bold</code>, <code>path_bold</code>). A color is a terminal color number from 0 to 255, such as <code>63</code>, or a hex code, such as <code>#5f5fff</code>.
+                    If the file cannot be read, %tool_name% prints a warning and keeps the default theme.
+                </li>
+            </list>
+        </chapter>
+    </chapter>
+
+    <chapter title="Where a value comes from" id="configuration_chapter-precedence">
+        <p>Each key is resolved in this order, the first one found wins:</p>
+        <list type="decimal">
+            <li>The command-line flag, such as <code>--parallel 2</code>.</li>
+            <li>
+                The environment variable <code>GOGWS_</code> followed by the key in capitals, with
+                <code>_</code> instead of <code>-</code>: <code>GOGWS_PARALLEL</code>,
+                <code>GOGWS_PROVIDER_CACHE_TTL</code>, <code>GOGWS_UPDATE_CHECK</code>... An empty variable is
+                ignored.
+            </li>
+            <li>The configuration file.</li>
+            <li>The default value.</li>
+        </list>
+        <p>
+            For example, <code>GOGWS_UPDATE_CHECK=false</code> turns off the update notice for the current terminal
+            without touching the file.
+        </p>
+    </chapter>
+
+    <chapter title="The config command" id="configuration_chapter-command">
+        <p>
+            <code>%tool_call% config</code> reads and writes the file for you, and tells where each value comes from.
+        </p>
+        <table>
+            <tr>
+                <td>Command</td>
+                <td>What it does</td>
+            </tr>
+            <tr>
+                <td><code>%tool_call% config</code></td>
+                <td>Show every key with its current value and its source.</td>
+            </tr>
+            <tr>
+                <td><code>%tool_call% config list</code></td>
+                <td>List the keys with their type, default value and environment variable.</td>
+            </tr>
+            <tr>
+                <td><code>%tool_call% config get &lt;key&gt;</code></td>
+                <td>Show the value of one key and its source.</td>
+            </tr>
+            <tr>
+                <td><code>%tool_call% config set &lt;key&gt; &lt;value&gt;</code></td>
+                <td>Check the value and write it in <path>~/.gws/config.yaml</path>.</td>
+            </tr>
+        </table>
+        <code-block lang="shell"><![CDATA[
+$ gogws config set parallel 8
+✓ parallel set to 8
+
+$ gogws config get parallel
+8 (source: file)
+
+$ GOGWS_PARALLEL=3 gogws config get parallel
+3 (source: env)
+]]></code-block>
+        <p>The source is one of <code>default</code>, <code>file</code>, <code>env</code> or <code>flag</code>.</p>
+        <p>
+            <code>config set</code> refuses an invalid value and leaves the file unchanged:
+        </p>
+        <code-block lang="shell"><![CDATA[
+$ gogws config set parallel 0
+Invalid parallel "0": must be an integer greater than or equal to 1.
+
+$ gogws config set format xml
+Invalid format "xml": must be one of text, json, yaml.
+]]></code-block>
+        <warning>
+            <code>config set</code> writes the whole file again. Comments are lost, and so are keys that
+            %tool_name% does not know. Edit the file by hand if you want to keep comments.
+        </warning>
+        <note>
+            A value that is not valid in the file, such as <code>parallel: abc</code>, stops every command with
+            <code>Failed to load configuration</code>, and tells which key and source are at fault. Fix it by
+            editing the file.
+        </note>
+    </chapter>
+
+    <chapter title="Other environment variables" id="configuration_chapter-environment">
+        <table>
+            <tr>
+                <td>Variable</td>
+                <td>Effect</td>
+            </tr>
+            <tr>
+                <td><code>GOGWS_NO_INTERACTIVE</code>, <code>CI</code></td>
+                <td>
+                    When <code>true</code>, disable the interactive interface and the questions, like
+                    <code>--no-interactive</code>.
+                </td>
+            </tr>
+            <tr>
+                <td><code>GITHUB_TOKEN</code>, <code>GITLAB_TOKEN</code></td>
+                <td>
+                    Access tokens used to list the repositories of a GitHub or GitLab organization. They are never
+                    read from the configuration file.
+                </td>
+            </tr>
+        </table>
+    </chapter>
+
+    <chapter title="See also" id="configuration_chapter-see-also">
+        <list>
+            <li><a href="Workspace-file.topic">Workspace file</a></li>
+            <li><a href="Hook.topic">Hook</a></li>
+            <li><a href="Completion.topic">Completion</a></li>
+        </list>
+    </chapter>
+</topic>

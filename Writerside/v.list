@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE vars SYSTEM "https://resources.jetbrains.com/writerside/1.0/vars.dtd">
+<vars>
+    <var name="tool_name" value="Gogws"/>
+    <var name="tool_call" value="gogws"/>
+    <var name="current_release_version" value="v0.4.0"/>
+    <var name="current_release_version_num" value="0.4.0"/>
+    <var name="ext_config_file" value=".gws"/>
+    <var name="tool_github_url" value="https://github.com/medialo/gogws"/>
+    <var name="tool_github_last_release" value="https://github.com/medialo/gogws/releases/latest"/>
+</vars>
