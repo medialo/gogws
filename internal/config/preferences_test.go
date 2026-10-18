@@ -71,8 +71,8 @@ func TestLoadPreferencesPrecedence(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if prefs.Parallel.Value != tt.wantValue || prefs.Parallel.Source != tt.wantSource {
-				t.Errorf("parallel = %d (%s), want %d (%s)", prefs.Parallel.Value, prefs.Parallel.Source, tt.wantValue, tt.wantSource)
+			if prefs.Parallel.Value() != tt.wantValue || prefs.Parallel.Source() != tt.wantSource {
+				t.Errorf("parallel = %d (%s), want %d (%s)", prefs.Parallel.Value(), prefs.Parallel.Source(), tt.wantValue, tt.wantSource)
 			}
 		})
 	}
@@ -83,28 +83,28 @@ func TestLoadPreferencesAllKeys(t *testing.T) {
 	t.Setenv("GOGWS_PROVIDER_CACHE_TTL", "2h")
 	t.Setenv("GOGWS_NO_COLOR", "true")
 
-	file := "format: json\ntheme: my-theme.yaml\nstop-on-error: true\ntrusted-workspaces:\n  - /a\n"
+	file := "format: json\ntheme: my-theme.yaml\nerrexit: true\ntrusted-workspaces:\n  - /a\n"
 	prefs, err := LoadPreferences(newFlags(t), writeConfig(t, file))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if prefs.Format.Value != "json" || prefs.Format.Source != SourceFile {
+	if prefs.Format.Value() != "json" || prefs.Format.Source() != SourceFile {
 		t.Errorf("format = %v", prefs.Format)
 	}
-	if prefs.Theme.Value != "my-theme.yaml" || prefs.Theme.Source != SourceFile {
+	if prefs.Theme.Value() != "my-theme.yaml" || prefs.Theme.Source() != SourceFile {
 		t.Errorf("theme = %v", prefs.Theme)
 	}
-	if !prefs.StopOnError.Value || prefs.StopOnError.Source != SourceFile {
-		t.Errorf("stop-on-error = %v", prefs.StopOnError)
+	if !prefs.StopOnError.Value() || prefs.StopOnError.Source() != SourceFile {
+		t.Errorf("errexit = %v", prefs.StopOnError)
 	}
-	if !prefs.NoColor.Value || prefs.NoColor.Source != SourceEnv {
+	if !prefs.NoColor.Value() || prefs.NoColor.Source() != SourceEnv {
 		t.Errorf("no-color = %v", prefs.NoColor)
 	}
-	if prefs.ProviderCacheTTL.Value != 2*time.Hour || prefs.ProviderCacheTTL.Source != SourceEnv {
+	if prefs.ProviderCacheTTL.Value() != 2*time.Hour || prefs.ProviderCacheTTL.Source() != SourceEnv {
 		t.Errorf("provider-cache-ttl = %v", prefs.ProviderCacheTTL)
 	}
-	if len(prefs.TrustedWorkspaces.Value) != 1 || prefs.TrustedWorkspaces.Source != SourceFile {
+	if len(prefs.TrustedWorkspaces.Value()) != 1 || prefs.TrustedWorkspaces.Source() != SourceFile {
 		t.Errorf("trusted-workspaces = %v", prefs.TrustedWorkspaces)
 	}
 }
@@ -117,9 +117,9 @@ func TestLoadPreferencesGlobalFallback(t *testing.T) {
 		wantValue  bool
 		wantSource ConfigSource
 	}{
-		{name: "default", wantValue: false, wantSource: SourceDefault},
-		{name: "file", file: "global-fallback: true\n", wantValue: true, wantSource: SourceFile},
-		{name: "env over file", file: "global-fallback: true\n", env: map[string]string{"GOGWS_GLOBAL_FALLBACK": "false"}, wantValue: false, wantSource: SourceEnv},
+		{name: "default", wantValue: true, wantSource: SourceDefault},
+		{name: "file", file: "global-fallback: false\n", wantValue: false, wantSource: SourceFile},
+		{name: "env over file", file: "global-fallback: false\n", env: map[string]string{"GOGWS_GLOBAL_FALLBACK": "true"}, wantValue: true, wantSource: SourceEnv},
 	}
 
 	for _, tt := range tests {
@@ -132,7 +132,7 @@ func TestLoadPreferencesGlobalFallback(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if prefs.GlobalFallback.Value != tt.wantValue || prefs.GlobalFallback.Source != tt.wantSource {
+			if prefs.GlobalFallback.Value() != tt.wantValue || prefs.GlobalFallback.Source() != tt.wantSource {
 				t.Errorf("global-fallback = %v, want %v (%s)", prefs.GlobalFallback, tt.wantValue, tt.wantSource)
 			}
 		})
@@ -145,7 +145,7 @@ func TestLoadPreferencesWithoutFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prefs.Parallel.Value != 9 || prefs.Parallel.Source != SourceFile {
+	if prefs.Parallel.Value() != 9 || prefs.Parallel.Source() != SourceFile {
 		t.Errorf("parallel = %v", prefs.Parallel)
 	}
 }

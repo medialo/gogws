@@ -74,7 +74,7 @@ type ConfigFile struct {
 	Format            string   `yaml:"format,omitempty"`
 	Theme             string   `yaml:"theme,omitempty"`
 	NoColor           *bool    `yaml:"no-color,omitempty"`
-	StopOnError       *bool    `yaml:"stop-on-error,omitempty"`
+	StopOnError       *bool    `yaml:"errexit,omitempty"`
 	ProviderCacheTTL  string   `yaml:"provider-cache-ttl,omitempty"`
 	TrustedWorkspaces []string `yaml:"trusted-workspaces,omitempty"`
 	UpdateCheck       *bool    `yaml:"update-check,omitempty"`
