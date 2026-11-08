@@ -16,7 +16,7 @@
             named <code>gcd</code> by default.
         </p>
 
-        <procedure title="Install gcd">
+        <procedure title="Install alias 'gcd'">
             <step>
                 Add the function to your shell startup file.
                 <tabs>
@@ -47,7 +47,7 @@ gogws search --completion powershell >> $PROFILE
 
         <p>
             Use <code>--alias</code> to choose other names, for example
-            <code>%tool_call% search --completion zsh --alias gcd,smartcd,goto,...</code>.
+            <code>%tool_call% search --completion zsh --alias gcd,smartcd,goto,...</code>. (An alias for each name provided will be created)
         </p>
     </chapter>
 
@@ -56,10 +56,10 @@ gogws search --completion powershell >> $PROFILE
             <code>gcd</code> is a shell function: it runs <code>%tool_call% search --cd</code> and changes to the
             result.
         </p>
-        <code-block lang="shell"><![CDATA[
-$ gcd infra-tools
+        <code-block  lang="shell"><![CDATA[
+$ gcd my-project-name
 $ pwd
-/work/top/mid/deep/infra-tools
+/work/dir/anotherdir/deepdir/my-project-name
 ]]></code-block>
 
         <tip>

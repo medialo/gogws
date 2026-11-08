@@ -1,8 +1,8 @@
 # gogws
 
-Manage a folder full of Git repositories as one workspace: status, fetch, pull and clone them all in parallel.
+Manage multiple repositories as one workspace with one cli: status, fetch, pull and clone them all in parallel.
 
-gogws reads the same `.projects.gws` files as [gws](https://github.com/StreakyCobra/gws).
+⭐⭐⭐ Don't forget to give a star if you like the project, it help a lot  ⭐⭐⭐
 
 ```
 $ gogws status
@@ -27,32 +27,20 @@ $ gogws status
 └──────────────────────────────────────────────────────────┘
 ```
 
-## Install
+## Quick install
 
 ```bash
 go install github.com/medialo/gogws/cmd/gogws@latest
+gogws --version
 ```
 
-Or from a clone: `make build` (binary in `bin/`), `make test`.
+## Full documentation
 
-## Quick start
+You can find the documention for gogws [here](LICENSE) 
 
-```bash
-cd ~/work
-gogws init        # find the git repositories below and write .gws/.projects.gws
-gogws status      # state of every repository
-gogws fetch       # git fetch everywhere
-gogws ff          # fast-forward pull everywhere
-gogws update      # clone what is listed but missing
-```
+## Feature request or a bug ?
 
-Commit `.gws/` so the next person runs `gogws update` and gets the same tree.
-
-## Docs
-
-- [Commands](docs/usage.md)
-- [Workspace files](docs/workspace.md): `.projects.gws`, nested workspaces, GitHub/GitLab discovery (beta), user config
-- [Hooks](docs/hooks.md): run scripts before/after commands, per project, per OS
+If you need a particular feature, or you have found a bug, please create an issue 
 
 ## License
 
