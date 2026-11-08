@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -51,11 +53,19 @@ func FindTrustedHook(path string) (TrustedHook, bool) {
 		return TrustedHook{}, false
 	}
 	for _, h := range hooks {
-		if h.Path == path {
+		if sameHookPath(h.Path, path) {
 			return h, true
 		}
 	}
 	return TrustedHook{}, false
+}
+
+func sameHookPath(a, b string) bool {
+	a, b = filepath.Clean(a), filepath.Clean(b)
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 
 func TrustHook(path, sha256 string) error {
@@ -65,7 +75,7 @@ func TrustHook(path, sha256 string) error {
 	}
 	updated := false
 	for i := range hooks {
-		if hooks[i].Path == path {
+		if sameHookPath(hooks[i].Path, path) {
 			hooks[i].SHA256 = sha256
 			updated = true
 		}
