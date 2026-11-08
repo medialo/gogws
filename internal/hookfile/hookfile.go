@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 )
 
 var Hooks = []string{
@@ -84,6 +85,35 @@ func Parse(path string) (File, bool) {
 	return f, true
 }
 
+func Conflicts(dir string, files []File) []Conflict {
+	byKey := make(map[Key][]string)
+	for _, f := range files {
+		byKey[f.Key] = append(byKey[f.Key], f.Path)
+	}
+	var conflicts []Conflict
+	for key, paths := range byKey {
+		if len(paths) > 1 {
+			sort.Strings(paths)
+			conflicts = append(conflicts, Conflict{Key: key, Dir: dir, Files: paths})
+		}
+	}
+	sort.Slice(conflicts, func(i, j int) bool {
+		return conflicts[i].Key.String() < conflicts[j].Key.String()
+	})
+	return conflicts
+}
+
+// SearchDirs returns the list of directories where hooks files can be present
+func SearchDirs(base, goos string) []string {
+	if slices.Contains(OSDirs, goos) {
+		return []string{filepath.Join(base, goos), base}
+	}
+	return []string{base}
+}
+
+type Scanner func(dir string) ([]File, error)
+
+// Scan return all hook file find in a directory
 func Scan(dir string) ([]File, error) {
 	entries, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {
@@ -104,34 +134,7 @@ func Scan(dir string) ([]File, error) {
 	return files, nil
 }
 
-func Conflicts(dir string, files []File) []Conflict {
-	byKey := make(map[Key][]string)
-	for _, f := range files {
-		byKey[f.Key] = append(byKey[f.Key], f.Path)
-	}
-	var conflicts []Conflict
-	for key, paths := range byKey {
-		if len(paths) > 1 {
-			sort.Strings(paths)
-			conflicts = append(conflicts, Conflict{Key: key, Dir: dir, Files: paths})
-		}
-	}
-	sort.Slice(conflicts, func(i, j int) bool {
-		return conflicts[i].Key.String() < conflicts[j].Key.String()
-	})
-	return conflicts
-}
-
-func SearchDirs(base, goos string) []string {
-	if slices.Contains(OSDirs, goos) {
-		return []string{filepath.Join(base, goos), base}
-	}
-	return []string{base}
-}
-
-type Scanner func(dir string) ([]File, error)
-
-func CachedScanner() Scanner {
+var getCachedScanner = sync.OnceValue(func() Scanner {
 	cache := make(map[string][]File)
 	return func(dir string) ([]File, error) {
 		if files, ok := cache[dir]; ok {
@@ -144,6 +147,10 @@ func CachedScanner() Scanner {
 		cache[dir] = files
 		return files, nil
 	}
+})
+
+func CachedScanner() Scanner {
+	return getCachedScanner()
 }
 
 func Resolve(scan Scanner, dirs []string, target, hook string) (*File, error) {
