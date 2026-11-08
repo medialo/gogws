@@ -38,8 +38,7 @@ func runFetch(getConfig func() *config.RunContext) error {
 
 	slog.Debug("Running fetch command", "workspace", cfg.WorkspaceRoot)
 
-	//ws, err := gws.New(cfg.WorkspaceRoot).Recursive(false).Load()
-	ws, err := cfg.NewLoader().Recursive(false).Load()
+	ws, err := cfg.NewLoader().Recursive(true).Load()
 	if err != nil {
 		return fmt.Errorf("failed to load projects: %w", err)
 	}
@@ -49,10 +48,11 @@ func runFetch(getConfig func() *config.RunContext) error {
 		return fmt.Errorf("failed to prepare project hooks: %w", err)
 	}
 
-	jobs := make([]engine.Job, 0, len(ws.Projects))
+	repos := ws.FlattenRepositories()
+	jobs := make([]engine.Job, 0, len(repos))
 	var skippedJobs []engine.JobResult
 
-	for _, p := range ws.Projects {
+	for _, p := range repos {
 		repoPath := p.GetPath()
 
 		jobs = append(jobs, engine.Job{

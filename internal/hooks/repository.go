@@ -136,17 +136,17 @@ func PrepareProjectHooks(root *gws2.Workspace, opts ProjectHooksOptions) (*Proje
 	return set, nil
 }
 
-func (s *ProjectHooks) Around(ctx context.Context, project *gws2.Project, notify engine.Notify, op func() error) error {
+func (s *ProjectHooks) Around(ctx context.Context, repository gws2.Repository, notify engine.Notify, op func() error) error {
 	if s == nil {
 		return op()
 	}
-	hooks := s.byProject[project.GetPath()]
+	hooks := s.byProject[repository.GetPath()]
 	if hooks == nil {
 		return op()
 	}
 
 	for _, h := range hooks.pre {
-		if err := s.runInJob(ctx, h, hooks.owner, project, notify); err != nil {
+		if err := s.runInJob(ctx, h, hooks.owner, repository, notify); err != nil {
 			return err
 		}
 	}
@@ -154,15 +154,15 @@ func (s *ProjectHooks) Around(ctx context.Context, project *gws2.Project, notify
 		return err
 	}
 	for _, h := range hooks.post {
-		if err := s.runInJob(ctx, h, hooks.owner, project, notify); err != nil {
+		if err := s.runInJob(ctx, h, hooks.owner, repository, notify); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *ProjectHooks) runInJob(ctx context.Context, hook *HookInfo, owner *gws2.Workspace, project *gws2.Project, notify engine.Notify) error {
-	dir := project.GetPath()
+func (s *ProjectHooks) runInJob(ctx context.Context, hook *HookInfo, owner *gws2.Workspace, repository gws2.Repository, notify engine.Notify) error {
+	dir := repository.GetPath()
 	if !isDir(dir) {
 		dir = owner.GetPath()
 	}
@@ -170,8 +170,8 @@ func (s *ProjectHooks) runInJob(ctx context.Context, hook *HookInfo, owner *gws2
 	env := hookEnv(Context{
 		Command:       s.command,
 		WorkspaceRoot: s.workspaceRoot,
-		ProjectDir:    project.GetPath(),
-		ProjectName:   project.GetName(),
+		ProjectDir:    repository.GetPath(),
+		ProjectName:   repository.GetName(),
 	}, hook)
 
 	notify.Phase(fmt.Sprintf("hook %s (%s)", hook.Name, filepath.Base(hook.Path)))
