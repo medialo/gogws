@@ -29,6 +29,8 @@ func TestParse(t *testing.T) {
 		{"post-ff", true, "", "post-ff", ""},
 		{"post-ff.sh", true, "", "post-ff", "sh"},
 		{"api.post-ff.ps1", true, "api", "post-ff", "ps1"},
+		{"post-ff.PS1", true, "", "post-ff", "ps1"},
+		{"api.post-ff.Sh", true, "api", "post-ff", "sh"},
 		{"foo.bar.post-ff.sh", true, "foo.bar", "post-ff", "sh"},
 		{"windows.post-ff", true, "windows", "post-ff", ""},
 		{"post-ff.sample", false, "", "", ""},

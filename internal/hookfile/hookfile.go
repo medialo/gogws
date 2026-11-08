@@ -63,12 +63,17 @@ func (e *ConflictError) Error() string {
 	return fmt.Sprintf("conflicting hooks for %s — keep only one, then check with 'gogws doctor run HookConflict'", e.Conflict)
 }
 
+// Parse return a File and a boolean indicating if the path is a valid hook file
 func Parse(path string) (File, bool) {
 	name := filepath.Base(path)
 	ext := ""
-	if dot := strings.LastIndex(name, "."); dot >= 0 && slices.Contains(Extensions, name[dot+1:]) {
-		ext = name[dot+1:]
-		name = name[:dot]
+
+	if dot := strings.LastIndex(name, "."); dot >= 0 {
+		extLower := strings.ToLower(name[dot+1:])
+		if slices.Contains(Extensions, extLower) {
+			ext = extLower
+			name = name[:dot]
+		}
 	}
 
 	target := ""
