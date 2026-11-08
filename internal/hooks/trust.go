@@ -109,10 +109,6 @@ func TrustHookFile(hookPath, sum string) error {
 }
 
 func approve(hook *HookInfo, workspaceRoot string) (bool, error) {
-	if hook.Origin == OriginGlobal {
-		return true, nil
-	}
-
 	state, sum, err := HookTrustState(hook.Path)
 	if err != nil {
 		return false, err
