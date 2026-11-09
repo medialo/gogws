@@ -36,7 +36,7 @@ gogws --version
 
 ## Full documentation
 
-You can find the documention for gogws [here](LICENSE) 
+You can find the documention for gogws [here](https://medialo.github.io/gogws)
 
 ## Feature request or a bug ?
 
